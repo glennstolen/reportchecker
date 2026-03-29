@@ -27,4 +27,4 @@ class Report(Base):
 
     # Relationships
     user = relationship("User", back_populates="reports")
-    evaluations = relationship("Evaluation", back_populates="report")
+    evaluations = relationship("Evaluation", back_populates="report", cascade="all, delete-orphan")

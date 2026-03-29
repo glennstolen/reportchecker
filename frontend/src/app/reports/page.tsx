@@ -9,6 +9,8 @@ interface Report {
   filename: string;
   status: string;
   created_at: string;
+  latest_score: number | null;
+  latest_max_score: number | null;
 }
 
 export default function ReportsPage() {
@@ -115,6 +117,9 @@ export default function ReportsPage() {
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Score
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Dato
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -138,6 +143,20 @@ export default function ReportsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(report.status)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {report.latest_score !== null ? (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900">
+                          {report.latest_score.toFixed(1)} / {report.latest_max_score?.toFixed(1)}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          ({((report.latest_score / (report.latest_max_score || 1)) * 100).toFixed(0)}%)
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(report.created_at).toLocaleDateString("no-NO")}

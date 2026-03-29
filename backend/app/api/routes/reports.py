@@ -40,9 +40,29 @@ async def upload_report(
 
 @router.get("", response_model=list[ReportListResponse])
 def list_reports(db: Session = Depends(get_db)):
-    """List all reports."""
+    """List all reports with latest evaluation scores."""
     reports = db.query(Report).order_by(Report.created_at.desc()).all()
-    return reports
+
+    result = []
+    for report in reports:
+        # Get latest completed evaluation
+        latest_eval = None
+        if report.evaluations:
+            completed_evals = [e for e in report.evaluations if e.status.value == "completed"]
+            if completed_evals:
+                latest_eval = max(completed_evals, key=lambda e: e.created_at)
+
+        result.append(ReportListResponse(
+            id=report.id,
+            title=report.title,
+            filename=report.filename,
+            status=report.status.value,
+            created_at=report.created_at,
+            latest_score=latest_eval.total_score if latest_eval else None,
+            latest_max_score=latest_eval.max_possible_score if latest_eval else None,
+        ))
+
+    return result
 
 
 @router.get("/{report_id}", response_model=ReportResponse)

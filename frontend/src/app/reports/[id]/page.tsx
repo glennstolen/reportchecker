@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Play, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
+import { Play, CheckCircle, XCircle, Clock, AlertCircle, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 
 interface Report {
   id: number;
@@ -30,6 +30,8 @@ interface AgentResult {
   feedback: string | null;
   details: Array<{ criterion: string; passed: boolean; comment: string }> | null;
   status: string;
+  prompt_used?: string | null;
+  raw_response?: string | null;
 }
 
 interface Evaluation {
@@ -42,6 +44,17 @@ interface Evaluation {
   created_at: string;
 }
 
+interface StreamingAgent {
+  id: number;
+  name: string;
+  description: string;
+  max_score: number;
+  status: "pending" | "running" | "completed" | "error";
+  score?: number | null;
+  feedback?: string | null;
+  details?: Array<{ criterion: string; passed: boolean; comment: string }> | null;
+}
+
 export default function ReportDetailPage() {
   const params = useParams();
   const reportId = params.id as string;
@@ -52,6 +65,22 @@ export default function ReportDetailPage() {
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [evaluating, setEvaluating] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Streaming state
+  const [streamingAgents, setStreamingAgents] = useState<Map<number, StreamingAgent>>(new Map());
+  const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set());
+
+  const toggleResultExpanded = (resultId: number) => {
+    setExpandedResults((prev) => {
+      const next = new Set(prev);
+      if (next.has(resultId)) {
+        next.delete(resultId);
+      } else {
+        next.add(resultId);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     Promise.all([
@@ -82,8 +111,11 @@ export default function ReportDetailPage() {
     if (selectedAgents.length === 0) return;
 
     setEvaluating(true);
+    setStreamingAgents(new Map());
+    setEvaluation(null);
+
     try {
-      const response = await fetch("http://localhost:8000/api/evaluations", {
+      const response = await fetch("http://localhost:8000/api/evaluations/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -91,8 +123,109 @@ export default function ReportDetailPage() {
           agent_config_ids: selectedAgents,
         }),
       });
-      const data = await response.json();
-      setEvaluation(data);
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) throw new Error("No reader available");
+
+      let buffer = "";
+      let evaluationId: number | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              switch (data.type) {
+                case "start":
+                  evaluationId = data.evaluation_id;
+                  // Initialize all agents with pending status
+                  setStreamingAgents(() => {
+                    const next = new Map<number, StreamingAgent>();
+                    for (const agent of data.agents) {
+                      next.set(agent.id, {
+                        id: agent.id,
+                        name: agent.name,
+                        description: agent.description,
+                        max_score: agent.max_score,
+                        status: "pending",
+                      });
+                    }
+                    return next;
+                  });
+                  break;
+
+                case "agent_start":
+                  setStreamingAgents((prev) => {
+                    const next = new Map(prev);
+                    const agent = next.get(data.agent_id);
+                    if (agent) {
+                      next.set(data.agent_id, {
+                        ...agent,
+                        status: "running",
+                      });
+                    }
+                    return next;
+                  });
+                  break;
+
+                case "agent_complete":
+                  setStreamingAgents((prev) => {
+                    const next = new Map(prev);
+                    const agent = next.get(data.agent_id);
+                    if (agent) {
+                      next.set(data.agent_id, {
+                        ...agent,
+                        status: "completed",
+                        score: data.score,
+                        feedback: data.feedback,
+                        details: data.details,
+                      });
+                    }
+                    return next;
+                  });
+                  break;
+
+                case "agent_error":
+                  setStreamingAgents((prev) => {
+                    const next = new Map(prev);
+                    const agent = next.get(data.agent_id);
+                    if (agent) {
+                      next.set(data.agent_id, {
+                        ...agent,
+                        status: "error",
+                      });
+                    }
+                    return next;
+                  });
+                  break;
+
+                case "complete":
+                  // Fetch the complete evaluation for final display
+                  if (evaluationId) {
+                    const evalResponse = await fetch(
+                      `http://localhost:8000/api/evaluations/${evaluationId}`
+                    );
+                    const evalData = await evalResponse.json();
+                    setEvaluation(evalData);
+                  }
+                  break;
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error("Evaluation failed:", error);
     } finally {
@@ -181,6 +314,102 @@ export default function ReportDetailPage() {
 
         {/* Right column: Results */}
         <div className="lg:col-span-2">
+          {/* Streaming view - shows during evaluation */}
+          {evaluating && (
+            <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+              <div className="flex items-center gap-3 mb-6">
+                <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Evaluerer rapport...</h2>
+                  <p className="text-sm text-gray-500">
+                    {streamingAgents.size > 0
+                      ? `${Array.from(streamingAgents.values()).filter(a => a.status === "completed").length} av ${streamingAgents.size} agenter fullført`
+                      : "Starter opp..."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Agent list with status */}
+              <div className="space-y-3">
+                {streamingAgents.size === 0 ? (
+                  /* Initial loading - show selected agents as pending */
+                  selectedAgents.map((agentId) => {
+                    const agentInfo = agents.find((a) => a.id === agentId);
+                    return (
+                      <div
+                        key={agentId}
+                        className="flex items-center gap-4 p-4 rounded-lg border bg-gray-50 border-gray-200 animate-pulse"
+                      >
+                        <Clock className="w-6 h-6 text-gray-400" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900">{agentInfo?.name}</p>
+                          <p className="text-sm text-gray-600 truncate">{agentInfo?.description}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  Array.from(streamingAgents.values()).map((agent) => (
+                  <div
+                    key={agent.id}
+                    className={`flex items-center gap-4 p-4 rounded-lg border transition-all ${
+                      agent.status === "completed"
+                        ? "bg-green-50 border-green-200"
+                        : agent.status === "running"
+                          ? "bg-blue-50 border-blue-200"
+                          : agent.status === "error"
+                            ? "bg-red-50 border-red-200"
+                            : "bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    {/* Status icon */}
+                    <div className="flex-shrink-0">
+                      {agent.status === "completed" ? (
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                      ) : agent.status === "running" ? (
+                        <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                      ) : agent.status === "error" ? (
+                        <XCircle className="w-6 h-6 text-red-600" />
+                      ) : (
+                        <Clock className="w-6 h-6 text-gray-400" />
+                      )}
+                    </div>
+
+                    {/* Agent info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900">{agent.name}</p>
+                      <p className="text-sm text-gray-600 truncate">{agent.description}</p>
+                    </div>
+
+                    {/* Score (when completed) */}
+                    {agent.status === "completed" && agent.score !== undefined && (
+                      <div className="flex-shrink-0 text-right">
+                        <p className="text-lg font-bold text-gray-900">
+                          {agent.score?.toFixed(1)} / {agent.max_score}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  ))
+                )}
+              </div>
+
+              {/* Progress bar */}
+              <div className="mt-6">
+                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 transition-all duration-300"
+                    style={{
+                      width: `${streamingAgents.size > 0
+                        ? (Array.from(streamingAgents.values()).filter(a => a.status === "completed").length / streamingAgents.size) * 100
+                        : 0}%`
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {evaluation ? (
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex items-center justify-between mb-4">
@@ -257,6 +486,44 @@ export default function ReportDetailPage() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Expandable AI dialog section */}
+                    {(result.prompt_used || result.raw_response) && (
+                      <div className="mt-4 pt-4 border-t">
+                        <button
+                          onClick={() => toggleResultExpanded(result.id)}
+                          className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
+                        >
+                          {expandedResults.has(result.id) ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
+                          Se AI-dialog
+                        </button>
+
+                        {expandedResults.has(result.id) && (
+                          <div className="mt-3 space-y-3">
+                            {result.prompt_used && (
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 mb-1">Prompt:</p>
+                                <pre className="bg-gray-50 rounded p-3 text-xs text-gray-700 max-h-48 overflow-auto whitespace-pre-wrap font-mono">
+                                  {result.prompt_used}
+                                </pre>
+                              </div>
+                            )}
+                            {result.raw_response && (
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 mb-1">AI-respons:</p>
+                                <pre className="bg-gray-900 text-green-400 rounded p-3 text-xs max-h-48 overflow-auto whitespace-pre-wrap font-mono">
+                                  {result.raw_response}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

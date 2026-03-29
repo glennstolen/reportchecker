@@ -25,6 +25,8 @@ class ReportListResponse(BaseModel):
     filename: str
     status: str
     created_at: datetime
+    latest_score: Optional[float] = None
+    latest_max_score: Optional[float] = None
 
     class Config:
         from_attributes = True

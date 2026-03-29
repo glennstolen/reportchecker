@@ -17,6 +17,8 @@ class AgentResultResponse(BaseModel):
     feedback: Optional[str]
     details: Optional[Any]  # Can be list or dict
     status: str
+    prompt_used: Optional[str] = None
+    raw_response: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -1,12 +1,18 @@
+import json
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models.evaluation import Evaluation, EvaluationStatus
+from app.models.evaluation import Evaluation, AgentResult, EvaluationStatus
 from app.models.report import Report
 from app.models.agent_configuration import AgentConfiguration
 from app.schemas.evaluation import EvaluationCreate, EvaluationResponse, AgentResultResponse
 from app.services.evaluation_service import EvaluationService
+from app.ai.claude_client import ClaudeClient
+from app.ai.prompt_builder import build_evaluation_prompt
+from app.ai.evaluation_orchestrator import EvaluationOrchestrator
 
 router = APIRouter()
 
@@ -43,6 +49,190 @@ async def create_evaluation(
     return _build_evaluation_response(db_evaluation)
 
 
+@router.post("/stream", response_class=StreamingResponse)
+async def create_evaluation_stream(
+    evaluation: EvaluationCreate,
+    db: Session = Depends(get_db),
+):
+    """Start a new evaluation with streaming updates via SSE."""
+    # Validate report exists
+    report = db.query(Report).filter(Report.id == evaluation.report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if not report.content_text:
+        raise HTTPException(
+            status_code=400,
+            detail="Report has not been processed yet.",
+        )
+
+    # Validate all agent configs exist
+    agents = (
+        db.query(AgentConfiguration)
+        .filter(AgentConfiguration.id.in_(evaluation.agent_config_ids))
+        .all()
+    )
+    if len(agents) != len(evaluation.agent_config_ids):
+        raise HTTPException(status_code=404, detail="One or more agent configurations not found")
+
+    async def generate_stream():
+        import asyncio
+
+        # Create evaluation record
+        db_evaluation = Evaluation(
+            report_id=report.id,
+            status=EvaluationStatus.RUNNING,
+            started_at=datetime.utcnow(),
+        )
+        db.add(db_evaluation)
+        db.commit()
+        db.refresh(db_evaluation)
+
+        # Create agent result records
+        agent_results = {}
+        for agent in agents:
+            agent_result = AgentResult(
+                evaluation_id=db_evaluation.id,
+                agent_config_id=agent.id,
+                max_score=agent.max_score,
+                status=EvaluationStatus.PENDING,
+            )
+            db.add(agent_result)
+            db.commit()
+            db.refresh(agent_result)
+            agent_results[agent.id] = agent_result
+
+        # Send initial event with evaluation ID and all agents info
+        agents_info = [
+            {'id': a.id, 'name': a.name, 'description': a.description, 'max_score': a.max_score}
+            for a in agents
+        ]
+        yield f"data: {json.dumps({'type': 'start', 'evaluation_id': db_evaluation.id, 'agents': agents_info})}\n\n"
+
+        client = ClaudeClient()
+        orchestrator = EvaluationOrchestrator()
+
+        # Queue for collecting results from parallel tasks
+        result_queue = asyncio.Queue()
+
+        async def evaluate_agent(agent):
+            """Evaluate a single agent and put result in queue."""
+            agent_result = agent_results[agent.id]
+
+            # Build prompt
+            prompt = build_evaluation_prompt(report.content_text, agent)
+            agent_result.prompt_used = prompt
+
+            # Notify that agent started
+            await result_queue.put({
+                'type': 'agent_start',
+                'agent_id': agent.id,
+                'agent_name': agent.name,
+            })
+
+            full_response = ""
+            try:
+                async for token in client.evaluate_stream(prompt):
+                    full_response += token
+
+                # Parse the complete response
+                agent_result.raw_response = full_response
+                parsed = orchestrator._parse_response(full_response, agent.max_score)
+
+                agent_result.score = parsed.get("score")
+                agent_result.feedback = parsed.get("feedback")
+                agent_result.details = parsed.get("details")
+                agent_result.status = EvaluationStatus.COMPLETED
+
+                await result_queue.put({
+                    'type': 'agent_complete',
+                    'agent_id': agent.id,
+                    'score': agent_result.score,
+                    'max_score': agent_result.max_score,
+                    'feedback': agent_result.feedback,
+                    'details': agent_result.details,
+                })
+
+            except Exception as e:
+                agent_result.status = EvaluationStatus.ERROR
+                agent_result.error_message = str(e)
+                agent_result.raw_response = full_response
+
+                await result_queue.put({
+                    'type': 'agent_error',
+                    'agent_id': agent.id,
+                    'error': str(e),
+                })
+
+        # Start all agent evaluations in parallel
+        tasks = [asyncio.create_task(evaluate_agent(agent)) for agent in agents]
+
+        # Collect results as they come in
+        completed = 0
+        total = len(agents)
+
+        while completed < total:
+            try:
+                # Wait for next result with timeout
+                result = await asyncio.wait_for(result_queue.get(), timeout=0.1)
+                yield f"data: {json.dumps(result)}\n\n"
+
+                if result['type'] in ('agent_complete', 'agent_error'):
+                    completed += 1
+            except asyncio.TimeoutError:
+                # No result yet, continue waiting
+                continue
+
+        # Wait for all tasks to complete
+        await asyncio.gather(*tasks)
+
+        # Commit all results to database
+        db.commit()
+
+        # Calculate totals
+        total_score = sum(
+            r.score for r in agent_results.values() if r.score is not None
+        )
+        max_possible = sum(
+            r.max_score for r in agent_results.values() if r.max_score is not None
+        )
+
+        db_evaluation.total_score = total_score
+        db_evaluation.max_possible_score = max_possible
+        db_evaluation.status = EvaluationStatus.COMPLETED
+        db_evaluation.completed_at = datetime.utcnow()
+
+        # Generate summary
+        service = EvaluationService(db)
+        db_evaluation.summary = service._generate_summary(db_evaluation)
+        db.commit()
+
+        # Send complete event
+        yield f"data: {json.dumps({'type': 'complete', 'evaluation_id': db_evaluation.id, 'total_score': total_score, 'max_possible_score': max_possible})}\n\n"
+
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/report/{report_id}", response_model=list[EvaluationResponse])
+def list_evaluations_for_report(report_id: int, db: Session = Depends(get_db)):
+    """List all evaluations for a specific report."""
+    evaluations = (
+        db.query(Evaluation)
+        .filter(Evaluation.report_id == report_id)
+        .order_by(Evaluation.created_at.desc())
+        .all()
+    )
+    return [_build_evaluation_response(e) for e in evaluations]
+
+
 @router.get("/{evaluation_id}", response_model=EvaluationResponse)
 def get_evaluation(evaluation_id: int, db: Session = Depends(get_db)):
     """Get evaluation results."""
@@ -74,18 +264,6 @@ def get_evaluation_status(evaluation_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/report/{report_id}", response_model=list[EvaluationResponse])
-def list_evaluations_for_report(report_id: int, db: Session = Depends(get_db)):
-    """List all evaluations for a specific report."""
-    evaluations = (
-        db.query(Evaluation)
-        .filter(Evaluation.report_id == report_id)
-        .order_by(Evaluation.created_at.desc())
-        .all()
-    )
-    return [_build_evaluation_response(e) for e in evaluations]
-
-
 def _build_evaluation_response(evaluation: Evaluation) -> EvaluationResponse:
     """Build response with agent results including agent names."""
     agent_results = []
@@ -100,6 +278,8 @@ def _build_evaluation_response(evaluation: Evaluation) -> EvaluationResponse:
                 feedback=result.feedback,
                 details=result.details,
                 status=result.status.value,
+                prompt_used=result.prompt_used,
+                raw_response=result.raw_response,
             )
         )
 

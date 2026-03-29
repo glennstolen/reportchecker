@@ -51,6 +51,10 @@ class AgentResult(Base):
     # Detailed results per criterion
     details = Column(JSON, nullable=True)
 
+    # Store prompt and response for transparency
+    prompt_used = Column(Text, nullable=True)
+    raw_response = Column(Text, nullable=True)
+
     # Status for this specific agent
     status = Column(Enum(EvaluationStatus), default=EvaluationStatus.PENDING)
     error_message = Column(Text, nullable=True)
