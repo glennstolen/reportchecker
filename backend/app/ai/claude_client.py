@@ -37,3 +37,32 @@ class ClaudeClient:
         ) as stream:
             async for text in stream.text_stream:
                 yield text
+
+    async def evaluate_with_cache(
+        self,
+        system_content: str,
+        user_content: str,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream evaluation with prompt caching.
+
+        The system_content (report) is cached and reused across multiple agent evaluations.
+        The user_content (agent criteria) varies per agent.
+        """
+        async with self.async_client.messages.stream(
+            model=self.model,
+            max_tokens=4096,
+            temperature=0,
+            system=[
+                {
+                    "type": "text",
+                    "text": system_content,
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ],
+            messages=[
+                {"role": "user", "content": user_content}
+            ],
+        ) as stream:
+            async for text in stream.text_stream:
+                yield text

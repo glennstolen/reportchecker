@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
 
@@ -13,6 +13,9 @@ class ReportResponse(BaseModel):
     filename: str
     status: str
     content_text: Optional[str] = None
+    kandidater: Optional[list[int]] = None
+    oppgave: Optional[str] = None
+    innleveringsdato: Optional[date] = None
     created_at: datetime
 
     class Config:
@@ -25,6 +28,9 @@ class ReportListResponse(BaseModel):
     filename: str
     status: str
     created_at: datetime
+    kandidater: Optional[list[int]] = None
+    oppgave: Optional[str] = None
+    innleveringsdato: Optional[date] = None
     latest_score: Optional[float] = None
     latest_max_score: Optional[float] = None
 

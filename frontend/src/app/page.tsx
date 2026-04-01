@@ -17,12 +17,13 @@ export default function Home() {
     Promise.all([
       fetch("http://localhost:8000/api/reports").then((r) => r.json()),
       fetch("http://localhost:8000/api/agents").then((r) => r.json()),
+      fetch("http://localhost:8000/api/evaluations/count").then((r) => r.json()),
     ])
-      .then(([reports, agents]) => {
+      .then(([reports, agents, evalCount]) => {
         setStats({
           reports: reports.length,
           agents: agents.length,
-          evaluations: 0,
+          evaluations: evalCount.count,
         });
       })
       .catch(() => {});

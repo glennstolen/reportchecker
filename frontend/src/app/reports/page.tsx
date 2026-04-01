@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { FileText, Plus, Trash2, Download } from "lucide-react";
 
 interface Report {
   id: number;
@@ -9,6 +9,9 @@ interface Report {
   filename: string;
   status: string;
   created_at: string;
+  kandidater: number[] | null;
+  oppgave: string | null;
+  innleveringsdato: string | null;
   latest_score: number | null;
   latest_max_score: number | null;
 }
@@ -43,6 +46,28 @@ export default function ReportsPage() {
       setReports(reports.filter((r) => r.id !== id));
     } catch (error) {
       console.error("Failed to delete report:", error);
+    }
+  };
+
+  const exportPdf = async (id: number, title: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/reports/${id}/export-pdf`);
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.detail || "Kunne ikke eksportere PDF");
+        return;
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `evaluering_${title.replace(/ /g, "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (error) {
+      console.error("Failed to export PDF:", error);
     }
   };
 
@@ -108,19 +133,19 @@ export default function ReportsPage() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tittel
+                  Kandidat
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Filnavn
+                  Oppgave
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Innlevert
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Score
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Dato
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Handlinger
@@ -135,11 +160,18 @@ export default function ReportsPage() {
                       href={`/reports/${report.id}`}
                       className="text-blue-600 hover:text-blue-800 font-medium"
                     >
-                      {report.title}
+                      {report.kandidater && report.kandidater.length > 0
+                        ? report.kandidater.join(", ")
+                        : "-"}
                     </a>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {report.oppgave || "-"}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {report.filename}
+                    {report.innleveringsdato
+                      ? new Date(report.innleveringsdato).toLocaleDateString("no-NO")
+                      : "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(report.status)}
@@ -158,16 +190,25 @@ export default function ReportsPage() {
                       <span className="text-sm text-gray-400">-</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(report.created_at).toLocaleDateString("no-NO")}
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => deleteReport(report.id)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      {report.latest_score !== null && (
+                        <button
+                          onClick={() => exportPdf(report.id, report.title)}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="Eksporter som PDF"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => deleteReport(report.id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Slett rapport"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

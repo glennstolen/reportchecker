@@ -8,7 +8,6 @@ export default function UploadPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [dragActive, setDragActive] = useState(false);
@@ -47,12 +46,6 @@ export default function UploadPage() {
 
     setFile(selectedFile);
     setError("");
-
-    // Auto-fill title from filename
-    if (!title) {
-      const nameWithoutExt = selectedFile.name.replace(/\.[^/.]+$/, "");
-      setTitle(nameWithoutExt);
-    }
   };
 
   const handleUpload = async () => {
@@ -66,7 +59,6 @@ export default function UploadPage() {
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("title", title || file.name);
 
     try {
       const response = await fetch("http://localhost:8000/api/reports/upload", {
@@ -140,24 +132,6 @@ export default function UploadPage() {
               <p className="text-sm text-gray-500">PDF eller Word-dokument</p>
             </>
           )}
-        </div>
-
-        {/* Title input */}
-        <div className="mt-6">
-          <label
-            htmlFor="title"
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Tittel
-          </label>
-          <input
-            type="text"
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Gi rapporten en tittel"
-            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
         </div>
 
         {/* Error message */}

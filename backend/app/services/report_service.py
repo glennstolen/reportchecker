@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session
 
 from app.models.report import Report, ReportStatus
 from app.core.storage import StorageClient
-from app.document_processing.text_extractor import extract_text_from_file
+from app.document_processing.text_extractor import (
+    extract_text_from_file,
+    extract_first_page_text,
+    extract_metadata_from_text,
+)
 
 
 class ReportService:
@@ -35,10 +39,18 @@ class ReportService:
         self.db.commit()
         self.db.refresh(report)
 
-        # Extract text content
+        # Extract text content and metadata
         try:
             text_content = extract_text_from_file(content, file_ext)
             report.content_text = text_content
+
+            # Extract metadata from first page
+            first_page = extract_first_page_text(content, file_ext)
+            metadata = extract_metadata_from_text(first_page)
+            report.kandidater = metadata.kandidater if metadata.kandidater else None
+            report.oppgave = metadata.oppgave
+            report.innleveringsdato = metadata.dato
+
             report.status = ReportStatus.READY
         except Exception as e:
             report.status = ReportStatus.ERROR

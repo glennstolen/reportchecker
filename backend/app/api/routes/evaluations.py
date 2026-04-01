@@ -11,10 +11,17 @@ from app.models.agent_configuration import AgentConfiguration
 from app.schemas.evaluation import EvaluationCreate, EvaluationResponse, AgentResultResponse
 from app.services.evaluation_service import EvaluationService
 from app.ai.claude_client import ClaudeClient
-from app.ai.prompt_builder import build_evaluation_prompt
+from app.ai.prompt_builder import build_evaluation_prompt, build_system_prompt, build_user_prompt
 from app.ai.evaluation_orchestrator import EvaluationOrchestrator
 
 router = APIRouter()
+
+
+@router.get("/count")
+def get_evaluation_count(db: Session = Depends(get_db)):
+    """Get total number of evaluations."""
+    count = db.query(Evaluation).count()
+    return {"count": count}
 
 
 @router.post("", response_model=EvaluationResponse)
@@ -112,6 +119,9 @@ async def create_evaluation_stream(
         client = ClaudeClient()
         orchestrator = EvaluationOrchestrator()
 
+        # Build system prompt once (contains report) - this will be cached by Anthropic
+        system_prompt = build_system_prompt(report.content_text)
+
         # Queue for collecting results from parallel tasks
         result_queue = asyncio.Queue()
 
@@ -119,9 +129,10 @@ async def create_evaluation_stream(
             """Evaluate a single agent and put result in queue."""
             agent_result = agent_results[agent.id]
 
-            # Build prompt
-            prompt = build_evaluation_prompt(report.content_text, agent)
-            agent_result.prompt_used = prompt
+            # Build user prompt (agent-specific criteria)
+            user_prompt = build_user_prompt(agent)
+            # Store full prompt for transparency
+            agent_result.prompt_used = build_evaluation_prompt(report.content_text, agent)
 
             # Notify that agent started
             await result_queue.put({
@@ -132,7 +143,8 @@ async def create_evaluation_stream(
 
             full_response = ""
             try:
-                async for token in client.evaluate_stream(prompt):
+                # Use cached evaluation - system prompt (report) is cached across agents
+                async for token in client.evaluate_with_cache(system_prompt, user_prompt):
                     full_response += token
 
                 # Parse the complete response
