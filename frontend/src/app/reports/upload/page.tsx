@@ -72,7 +72,8 @@ export default function UploadPage() {
       }
 
       const report = await response.json();
-      router.push(`/reports/${report.id}`);
+      // Redirect to anonymization page first
+      router.push(`/reports/${report.id}/anonymize`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Noe gikk galt");
     } finally {

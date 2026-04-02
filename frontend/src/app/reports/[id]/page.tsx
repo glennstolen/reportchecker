@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { Play, CheckCircle, XCircle, Clock, AlertCircle, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { Play, CheckCircle, XCircle, Clock, AlertCircle, ChevronDown, ChevronUp, Loader2, UserX, Download } from "lucide-react";
 
 interface Report {
   id: number;
@@ -11,6 +11,8 @@ interface Report {
   status: string;
   content_text: string | null;
   created_at: string;
+  anonymized_file_path: string | null;
+  mapping_file_path: string | null;
 }
 
 interface Agent {
@@ -18,6 +20,7 @@ interface Agent {
   name: string;
   description: string;
   max_score: number;
+  default_enabled: boolean;
 }
 
 interface AgentResult {
@@ -56,6 +59,7 @@ interface StreamingAgent {
 
 export default function ReportDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const reportId = params.id as string;
 
   const [report, setReport] = useState<Report | null>(null);
@@ -68,6 +72,18 @@ export default function ReportDetailPage() {
   // Streaming state
   const [streamingAgents, setStreamingAgents] = useState<Map<number, StreamingAgent>>(new Map());
   const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set());
+
+  const downloadFile = async (url: string, filename: string) => {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
 
   const toggleResultExpanded = (resultId: number) => {
     setExpandedResults((prev) => {
@@ -90,8 +106,8 @@ export default function ReportDetailPage() {
       .then(([reportData, agentsData, evaluationsData]) => {
         setReport(reportData);
         setAgents(agentsData);
-        // Pre-select all agents
-        setSelectedAgents(agentsData.map((a: Agent) => a.id));
+        // Pre-select agents that are enabled by default
+        setSelectedAgents(agentsData.filter((a: Agent) => a.default_enabled).map((a: Agent) => a.id));
         // Show latest evaluation if exists
         if (evaluationsData.length > 0) {
           setEvaluation(evaluationsData[0]);
@@ -257,10 +273,54 @@ export default function ReportDetailPage() {
     <div className="px-4">
       {/* Report header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{report.title}</h1>
-        <p className="text-gray-600">
-          {report.filename} - {new Date(report.created_at).toLocaleDateString("no-NO")}
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{report.title}</h1>
+            <p className="text-gray-600">
+              {report.filename} - {new Date(report.created_at).toLocaleDateString("no-NO")}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {report.anonymized_file_path ? (
+              <>
+                <button
+                  onClick={() => downloadFile(
+                    `http://localhost:8000/api/reports/${reportId}/anonymized-pdf`,
+                    `${report.title.replace(/\s+/g, "_")}_anonym.pdf`
+                  )}
+                  className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-gray-50 text-sm"
+                >
+                  <Download className="w-4 h-4" />
+                  Anonym PDF
+                </button>
+                <button
+                  onClick={() => downloadFile(
+                    `http://localhost:8000/api/reports/${reportId}/mapping-file`,
+                    `kandidatmapping_${report.title.replace(/\s+/g, "_")}.txt`
+                  )}
+                  className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-gray-50 text-sm"
+                >
+                  <Download className="w-4 h-4" />
+                  Mapping
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => router.push(`/reports/${reportId}/anonymize`)}
+                className="flex items-center gap-2 px-3 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm"
+              >
+                <UserX className="w-4 h-4" />
+                Anonymiser
+              </button>
+            )}
+          </div>
+        </div>
+        {report.anonymized_file_path && (
+          <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 bg-green-100 text-green-700 rounded text-sm">
+            <CheckCircle className="w-4 h-4" />
+            Anonymisert
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -291,7 +351,7 @@ export default function ReportDetailPage() {
 
             <button
               onClick={runEvaluation}
-              disabled={selectedAgents.length === 0 || evaluating || report.status.toUpperCase() !== "READY"}
+              disabled={selectedAgents.length === 0 || evaluating || report.status.toUpperCase() !== "READY" || !report.anonymized_file_path}
               className="w-full mt-4 flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play className="w-4 h-4" />
@@ -301,6 +361,18 @@ export default function ReportDetailPage() {
             {report.status.toUpperCase() !== "READY" && (
               <p className="text-sm text-yellow-600 mt-2">
                 Rapporten behandles fortsatt. Vent til den er klar.
+              </p>
+            )}
+
+            {report.status.toUpperCase() === "READY" && !report.anonymized_file_path && (
+              <p className="text-sm text-orange-600 mt-2">
+                Rapporten må anonymiseres før evaluering.{" "}
+                <button
+                  onClick={() => router.push(`/reports/${reportId}/anonymize`)}
+                  className="underline hover:no-underline"
+                >
+                  Anonymiser nå
+                </button>
               </p>
             )}
           </div>

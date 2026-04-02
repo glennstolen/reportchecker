@@ -19,6 +19,9 @@ class AgentConfiguration(Base):
 
     max_score = Column(Float, default=10.0)
 
+    # Whether this agent is enabled by default in the evaluation UI
+    default_enabled = Column(Boolean, default=True)
+
     # Custom prompt template (optional - uses default if not set)
     prompt_template = Column(Text, nullable=True)
 

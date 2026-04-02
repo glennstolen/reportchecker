@@ -20,9 +20,9 @@ def extract_metadata_from_text(text: str) -> ReportMetadata:
     oppgave = None
     dato = None
 
-    # Extract kandidat number(s) - look for "Kandidat:" or "Kandidatnummer:" followed by numbers
+    # Extract kandidat number(s) - look for "Kandidat:", "Kandidat(er):", or "Kandidatnummer:" followed by numbers
     # Can be multiple candidates separated by comma, "og", or "&"
-    kandidat_pattern = r'[Kk]andidat(?:nummer)?[:\s]+([0-9,\s&og]+)'
+    kandidat_pattern = r'[Kk]andidat(?:\(er\)|nummer)?[:\s]+([0-9,\s&og]+)'
     kandidat_match = re.search(kandidat_pattern, text)
     if kandidat_match:
         kandidat_str = kandidat_match.group(1)

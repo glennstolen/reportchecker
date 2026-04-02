@@ -166,51 +166,69 @@ async def create_evaluation_stream(
                 })
 
             except Exception as e:
+                import traceback
+                error_detail = f"{type(e).__name__}: {str(e)}"
+                print(f"Agent {agent.name} failed: {error_detail}")
+                print(traceback.format_exc())
+
                 agent_result.status = EvaluationStatus.ERROR
-                agent_result.error_message = str(e)
+                agent_result.error_message = error_detail
                 agent_result.raw_response = full_response
 
                 await result_queue.put({
                     'type': 'agent_error',
                     'agent_id': agent.id,
-                    'error': str(e),
+                    'error': error_detail,
                 })
 
-        # Start all agent evaluations in parallel
-        tasks = [asyncio.create_task(evaluate_agent(agent)) for agent in agents]
+        # Run agent evaluations sequentially to avoid rate limiting
+        # (30,000 input tokens per minute limit)
+        for agent in agents:
+            # Start the evaluation
+            task = asyncio.create_task(evaluate_agent(agent))
 
-        # Collect results as they come in
-        completed = 0
-        total = len(agents)
+            # Wait for the agent_start event
+            while True:
+                try:
+                    result = await asyncio.wait_for(result_queue.get(), timeout=0.1)
+                    yield f"data: {json.dumps(result)}\n\n"
+                    if result['type'] == 'agent_start':
+                        break
+                except asyncio.TimeoutError:
+                    continue
 
-        while completed < total:
-            try:
-                # Wait for next result with timeout
-                result = await asyncio.wait_for(result_queue.get(), timeout=0.1)
-                yield f"data: {json.dumps(result)}\n\n"
+            # Wait for this agent to complete before starting next
+            await task
 
-                if result['type'] in ('agent_complete', 'agent_error'):
-                    completed += 1
-            except asyncio.TimeoutError:
-                # No result yet, continue waiting
-                continue
-
-        # Wait for all tasks to complete
-        await asyncio.gather(*tasks)
+            # Get the completion/error result
+            while True:
+                try:
+                    result = await asyncio.wait_for(result_queue.get(), timeout=0.1)
+                    yield f"data: {json.dumps(result)}\n\n"
+                    if result['type'] in ('agent_complete', 'agent_error'):
+                        break
+                except asyncio.TimeoutError:
+                    continue
 
         # Commit all results to database
         db.commit()
 
-        # Calculate totals
-        total_score = sum(
+        # Calculate totals - normalize to 100
+        raw_score = sum(
             r.score for r in agent_results.values() if r.score is not None
         )
-        max_possible = sum(
+        raw_max = sum(
             r.max_score for r in agent_results.values() if r.max_score is not None
         )
 
-        db_evaluation.total_score = total_score
-        db_evaluation.max_possible_score = max_possible
+        # Normalize score to percentage of 100
+        if raw_max > 0:
+            normalized_score = (raw_score / raw_max) * 100
+        else:
+            normalized_score = 0
+
+        db_evaluation.total_score = round(normalized_score, 1)
+        db_evaluation.max_possible_score = 100.0
         db_evaluation.status = EvaluationStatus.COMPLETED
         db_evaluation.completed_at = datetime.utcnow()
 
@@ -220,7 +238,7 @@ async def create_evaluation_stream(
         db.commit()
 
         # Send complete event
-        yield f"data: {json.dumps({'type': 'complete', 'evaluation_id': db_evaluation.id, 'total_score': total_score, 'max_possible_score': max_possible})}\n\n"
+        yield f"data: {json.dumps({'type': 'complete', 'evaluation_id': db_evaluation.id, 'total_score': db_evaluation.total_score, 'max_possible_score': db_evaluation.max_possible_score})}\n\n"
 
     return StreamingResponse(
         generate_stream(),

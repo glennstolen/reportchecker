@@ -106,10 +106,5 @@ class EvaluationService:
             score_str = f"{result.score:.1f}/{result.max_score:.1f}" if result.score is not None else "N/A"
             lines.append(f"- {agent_name}: {score_str}")
 
-        total_pct = (
-            (evaluation.total_score / evaluation.max_possible_score * 100)
-            if evaluation.max_possible_score
-            else 0
-        )
-
-        return f"Total: {evaluation.total_score:.1f}/{evaluation.max_possible_score:.1f} ({total_pct:.0f}%)\n\n" + "\n".join(lines)
+        # total_score is already normalized to 100
+        return f"Total: {evaluation.total_score:.1f}/100 ({evaluation.total_score:.0f}%)\n\n" + "\n".join(lines)

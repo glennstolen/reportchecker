@@ -9,6 +9,7 @@ class AgentConfigResponse(BaseModel):
     description: Optional[str]
     criteria: dict
     max_score: float
+    default_enabled: bool = True
     created_at: datetime
 
     class Config:

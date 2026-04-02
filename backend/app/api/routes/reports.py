@@ -1,3 +1,4 @@
+import re
 from io import BytesIO
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse
@@ -11,10 +12,19 @@ from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 from app.core.database import get_db
+from app.core.storage import StorageClient
 from app.models.report import Report, ReportStatus
 from app.models.evaluation import EvaluationStatus
-from app.schemas.report import ReportResponse, ReportListResponse
+from app.schemas.report import (
+    ReportResponse,
+    ReportListResponse,
+    AnonymizeRequest,
+    AnonymizeResponse,
+    AuthorMappingResponse,
+)
 from app.services.report_service import ReportService
+from app.document_processing.pdf_anonymizer import anonymize_pdf, extract_report_info
+from app.document_processing.text_extractor import extract_text_from_pdf, extract_metadata_from_text
 
 router = APIRouter()
 
@@ -72,6 +82,7 @@ def list_reports(db: Session = Depends(get_db)):
             innleveringsdato=report.innleveringsdato,
             latest_score=latest_eval.total_score if latest_eval else None,
             latest_max_score=latest_eval.max_possible_score if latest_eval else None,
+            is_anonymized=report.anonymized_file_path is not None,
         ))
 
     return result
@@ -173,11 +184,193 @@ def export_report_pdf(report_id: int, db: Session = Depends(get_db)):
     doc.build(elements)
     buffer.seek(0)
 
-    filename = f"evaluering_{report.title.replace(' ', '_')}.pdf"
+    # Sanitize filename - remove special characters that break Content-Disposition
+    safe_title = re.sub(r'[^\w\s-]', '', report.title).replace(' ', '_')
+    filename = f"evaluering_{safe_title}.pdf"
     return StreamingResponse(
         buffer,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@router.get("/{report_id}/extract-info")
+def extract_info(report_id: int, db: Session = Depends(get_db)):
+    """Extract author and contribution information from a report for anonymization."""
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Download the PDF
+    storage = StorageClient()
+    try:
+        content = storage.download_file(report.file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not download file: {e}")
+
+    # Extract information
+    try:
+        info = extract_report_info(content)
+        return {
+            "authors": info.authors,
+            "medforfatterbidrag": info.medforfatterbidrag,
+            "ki_brukt": info.ki_brukt,
+            "total_pages": info.total_pages,
+            "suggested_pages_to_remove": info.suggested_pages_to_remove,
+            "title": info.extracted_title or report.title,  # Prefer extracted title
+            "oppgave": info.extracted_oppgave or report.oppgave,  # Prefer extracted oppgave
+            "dato": info.extracted_dato or (report.innleveringsdato.strftime("%d.%m.%Y") if report.innleveringsdato else None),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not extract info: {e}")
+
+
+@router.post("/{report_id}/anonymize", response_model=AnonymizeResponse)
+def anonymize_report(
+    report_id: int,
+    request: AnonymizeRequest,
+    db: Session = Depends(get_db),
+):
+    """Anonymize a report by removing identifying information."""
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Download original PDF
+    storage = StorageClient()
+    try:
+        original_content = storage.download_file(report.file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not download original file: {e}")
+
+    # Prepare authors list
+    authors = [{"name": a.name, "initials": a.initials} for a in request.authors]
+
+    # Use title, dato, and oppgave from request if provided, otherwise fall back to report data
+    title = request.title or report.title
+    dato = request.dato or (report.innleveringsdato.strftime("%d.%m.%Y") if report.innleveringsdato else "")
+    oppgave = request.oppgave or report.oppgave or ""
+
+    # Anonymize the PDF
+    try:
+        anonymized_content, mapping_content, mappings = anonymize_pdf(
+            content=original_content,
+            title=title,
+            oppgave=oppgave,
+            dato=dato,
+            authors=authors,
+            medforfatterbidrag=request.medforfatterbidrag,
+            ki_brukt=request.ki_brukt,
+            pages_to_remove=request.pages_to_remove,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Anonymization failed: {e}")
+
+    # Generate file paths
+    base_name = report.file_path.split("/")[-1].rsplit(".", 1)[0]
+    anonymized_path = f"anonymized/{base_name}.pdf"
+    mapping_path = f"mappings/{base_name}_mapping.txt"
+
+    # Upload anonymized PDF and mapping file
+    try:
+        storage.upload_file(anonymized_path, anonymized_content)
+        storage.upload_file(mapping_path, mapping_content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not upload files: {e}")
+
+    # Extract text from anonymized PDF for use in evaluations
+    try:
+        anonymized_text = extract_text_from_pdf(anonymized_content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not extract text from anonymized PDF: {e}")
+
+    # Extract metadata (kandidater) from anonymized text
+    metadata = extract_metadata_from_text(anonymized_text)
+
+    # Parse dato string to date object
+    innleveringsdato = None
+    if dato:
+        try:
+            from datetime import datetime
+            innleveringsdato = datetime.strptime(dato, "%d.%m.%Y").date()
+        except ValueError:
+            pass  # Keep as None if parsing fails
+
+    # Update report with anonymization info and anonymized text
+    report.anonymized_file_path = anonymized_path
+    report.mapping_file_path = mapping_path
+    report.candidate_mappings = [m.to_dict() for m in mappings]
+    report.content_text = anonymized_text  # Replace with anonymized content
+    report.kandidater = metadata.kandidater  # Update kandidater from anonymized cover
+    report.innleveringsdato = innleveringsdato  # Update date from cover page
+    report.title = title  # Update title from cover page
+    report.oppgave = oppgave if oppgave else None  # Update oppgave from cover page
+    db.commit()
+
+    return AnonymizeResponse(
+        anonymized_file_path=anonymized_path,
+        mapping_file_path=mapping_path,
+        mappings=[
+            AuthorMappingResponse(
+                name=m.name,
+                initials=m.initials,
+                candidate_number=m.candidate_number,
+            )
+            for m in mappings
+        ],
+        message="Rapport anonymisert",
+    )
+
+
+@router.get("/{report_id}/mapping-file")
+def download_mapping_file(report_id: int, db: Session = Depends(get_db)):
+    """Download the candidate mapping file for a report."""
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if not report.mapping_file_path:
+        raise HTTPException(status_code=404, detail="No mapping file available. Anonymize the report first.")
+
+    storage = StorageClient()
+    try:
+        content = storage.download_file(report.mapping_file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not download mapping file: {e}")
+
+    # Sanitize filename - remove special characters that break Content-Disposition
+    safe_title = re.sub(r'[^\w\s-]', '', report.title).replace(' ', '_')
+    filename = f"kandidatmapping_{safe_title}.txt"
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@router.get("/{report_id}/anonymized-pdf")
+def download_anonymized_pdf(report_id: int, db: Session = Depends(get_db)):
+    """Download the anonymized PDF for a report."""
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if not report.anonymized_file_path:
+        raise HTTPException(status_code=404, detail="No anonymized PDF available. Anonymize the report first.")
+
+    storage = StorageClient()
+    try:
+        content = storage.download_file(report.anonymized_file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not download anonymized PDF: {e}")
+
+    # Sanitize filename - remove special characters that break Content-Disposition
+    safe_title = re.sub(r'[^\w\s-]', '', report.title).replace(' ', '_')
+    filename = f"{safe_title}_anonym.pdf"
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
 

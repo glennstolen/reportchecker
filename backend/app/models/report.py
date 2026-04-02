@@ -30,6 +30,11 @@ class Report(Base):
     oppgave = Column(String(255), nullable=True)  # Assignment name
     innleveringsdato = Column(Date, nullable=True)  # Submission date
 
+    # Anonymization
+    anonymized_file_path = Column(String(500), nullable=True)  # Path to anonymized PDF
+    mapping_file_path = Column(String(500), nullable=True)  # Path to mapping file
+    candidate_mappings = Column(JSON, nullable=True)  # [{"name": "...", "initials": "...", "candidate_number": "..."}]
+
     # Relationships
     user = relationship("User", back_populates="reports")
     evaluations = relationship("Evaluation", back_populates="report", cascade="all, delete-orphan")

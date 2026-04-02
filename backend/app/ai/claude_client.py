@@ -1,3 +1,4 @@
+import httpx
 import anthropic
 from typing import AsyncGenerator
 from app.config import get_settings
@@ -8,8 +9,19 @@ class ClaudeClient:
 
     def __init__(self):
         settings = get_settings()
-        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        self.async_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        # Set generous timeout for complex evaluations (10 minutes)
+        # Also set read timeout separately for streaming responses
+        timeout = httpx.Timeout(600.0, connect=60.0, read=600.0, write=60.0)
+        self.client = anthropic.Anthropic(
+            api_key=settings.anthropic_api_key,
+            timeout=timeout,
+            max_retries=3,  # Retry on transient failures
+        )
+        self.async_client = anthropic.AsyncAnthropic(
+            api_key=settings.anthropic_api_key,
+            timeout=timeout,
+            max_retries=3,  # Retry on transient failures
+        )
         self.model = "claude-sonnet-4-20250514"
 
     async def evaluate(self, prompt: str) -> str:
