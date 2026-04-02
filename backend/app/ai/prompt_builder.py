@@ -19,16 +19,18 @@ SYSTEM_TEMPLATE = """Du er en ekspert på å vurdere akademiske rapporter, spesi
 ## Generelle instruksjoner
 
 Du vil motta evalueringskriterier for en spesifikk sjekk. Vurder rapporten basert på disse kriteriene.
-Gi en score og konkret, konstruktiv tilbakemelding.
+Gi en score per kriterium og konkret, konstruktiv tilbakemelding.
 
 Svar KUN med gyldig JSON i følgende format (ingen annen tekst):
 {{
-  "score": <tall mellom 0 og max_score>,
+  "score": <total score - sum av alle kriterier>,
   "feedback": "<hovedtilbakemelding på 2-3 setninger>",
   "details": [
-    {{"criterion": "<kriterienavn>", "passed": <true/false>, "comment": "<kort kommentar>"}}
+    {{"criterion": "<kriterienavn>", "score": <oppnådd poeng>, "max_score": <maks poeng for dette kriteriet>, "comment": "<kort kommentar>"}}
   ]
 }}
+
+VIKTIG: For hvert kriterium, gi en score fra 0 til kriteriets vekt (max_score). Total score skal være summen av alle kriteriescore.
 """
 
 USER_TEMPLATE = """## Evalueringskriterier
@@ -68,12 +70,14 @@ Gi en score fra 0 til {max_score} og konkret, konstruktiv tilbakemelding.
 
 Svar KUN med gyldig JSON i følgende format (ingen annen tekst):
 {{
-  "score": <tall mellom 0 og {max_score}>,
+  "score": <total score - sum av alle kriterier>,
   "feedback": "<hovedtilbakemelding på 2-3 setninger>",
   "details": [
-    {{"criterion": "<kriterienavn>", "passed": <true/false>, "comment": "<kort kommentar>"}}
+    {{"criterion": "<kriterienavn>", "score": <oppnådd poeng>, "max_score": <maks poeng for dette kriteriet>, "comment": "<kort kommentar>"}}
   ]
 }}
+
+VIKTIG: For hvert kriterium, gi en score fra 0 til kriteriets vekt (max_score). Total score skal være summen av alle kriteriescore.
 """
 
 

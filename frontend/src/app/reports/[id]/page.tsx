@@ -23,6 +23,16 @@ interface Agent {
   default_enabled: boolean;
 }
 
+interface CriterionDetail {
+  criterion: string;
+  comment: string;
+  // New format with scores
+  score?: number;
+  max_score?: number;
+  // Legacy format with passed boolean
+  passed?: boolean;
+}
+
 interface AgentResult {
   id: number;
   agent_config_id: number;
@@ -30,7 +40,7 @@ interface AgentResult {
   score: number | null;
   max_score: number | null;
   feedback: string | null;
-  details: Array<{ criterion: string; passed: boolean; comment: string }> | null;
+  details: CriterionDetail[] | null;
   status: string;
   prompt_used?: string | null;
   raw_response?: string | null;
@@ -54,7 +64,7 @@ interface StreamingAgent {
   status: "pending" | "running" | "completed" | "error";
   score?: number | null;
   feedback?: string | null;
-  details?: Array<{ criterion: string; passed: boolean; comment: string }> | null;
+  details?: CriterionDetail[] | null;
 }
 
 export default function ReportDetailPage() {
@@ -536,22 +546,37 @@ export default function ReportDetailPage() {
 
                     {result.details && result.details.length > 0 && (
                       <div className="space-y-2">
-                        {result.details.map((detail, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-start gap-2 text-sm"
-                          >
-                            {detail.passed ? (
-                              <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                            ) : (
-                              <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                            )}
-                            <div>
-                              <span className="font-medium">{detail.criterion}:</span>{" "}
-                              <span className="text-gray-600">{detail.comment}</span>
+                        {result.details.map((detail, idx) => {
+                          // Check if we have score-based format or legacy passed format
+                          const hasScore = detail.score !== undefined && detail.max_score !== undefined;
+                          const isPassing = hasScore
+                            ? detail.score! >= detail.max_score! * 0.5
+                            : detail.passed;
+
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-start gap-2 text-sm"
+                            >
+                              {isPassing ? (
+                                <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                              ) : (
+                                <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                              )}
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{detail.criterion}</span>
+                                  {hasScore && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                                      {detail.score} av {detail.max_score}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-gray-600">{detail.comment}</span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
 
