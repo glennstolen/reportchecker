@@ -18,7 +18,6 @@ interface Agent {
   name: string;
   description: string;
   max_score: number;
-  is_template: boolean;
 }
 
 interface AgentResult {
@@ -91,8 +90,8 @@ export default function ReportDetailPage() {
       .then(([reportData, agentsData, evaluationsData]) => {
         setReport(reportData);
         setAgents(agentsData);
-        // Pre-select template agents
-        setSelectedAgents(agentsData.filter((a: Agent) => a.is_template).map((a: Agent) => a.id));
+        // Pre-select all agents
+        setSelectedAgents(agentsData.map((a: Agent) => a.id));
         // Show latest evaluation if exists
         if (evaluationsData.length > 0) {
           setEvaluation(evaluationsData[0]);
@@ -285,11 +284,6 @@ export default function ReportDetailPage() {
                   <div>
                     <p className="font-medium text-gray-900">{agent.name}</p>
                     <p className="text-sm text-gray-600">{agent.description}</p>
-                    {agent.is_template && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded mt-1 inline-block">
-                        Template
-                      </span>
-                    )}
                   </div>
                 </label>
               ))}

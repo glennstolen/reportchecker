@@ -24,8 +24,6 @@ export interface AgentConfiguration {
     scoringRubric?: string;
   };
   max_score: number;
-  prompt_template: string | null;
-  is_template: boolean;
   created_at: string;
 }
 
