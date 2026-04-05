@@ -76,15 +76,21 @@ class EvaluationOrchestrator:
         try:
             data = json.loads(json_match.group())
 
-            # Validate and clamp score
-            score = data.get("score")
-            if score is not None:
-                score = max(0, min(float(score), 100.0))
+            details = data.get("details", [])
+
+            # Compute total from per-criterion scores rather than trusting Claude's
+            # top-level "score" field, which can be an inconsistent holistic estimate.
+            computed_score = sum(
+                float(d["score"])
+                for d in details
+                if isinstance(d.get("score"), (int, float))
+            )
+            score = max(0, min(computed_score, 100.0))
 
             return {
                 "score": score,
                 "feedback": data.get("feedback", ""),
-                "details": data.get("details", []),
+                "details": details,
             }
         except json.JSONDecodeError:
             return {

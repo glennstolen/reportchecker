@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Play, CheckCircle, XCircle, Clock, AlertCircle, ChevronDown, ChevronUp, Loader2, UserX, Download, List } from "lucide-react";
+import { Play, CheckCircle, XCircle, Clock, AlertCircle, ChevronDown, ChevronUp, Loader2, UserX, Download, List, Minus } from "lucide-react";
 
 interface Report {
   id: number;
@@ -25,9 +25,9 @@ interface Agent {
 interface CriterionDetail {
   criterion: string;
   comment: string;
-  // New format with scores
   score?: number;
   max_score?: number;
+  applicable?: boolean;
   // Legacy format with passed boolean
   passed?: boolean;
 }
@@ -527,8 +527,8 @@ export default function ReportDetailPage() {
                     {result.details && result.details.length > 0 && (
                       <div className="space-y-2">
                         {result.details.map((detail, idx) => {
-                          // Check if we have score-based format or legacy passed format
                           const hasScore = detail.score !== undefined && detail.max_score !== undefined;
+                          const isNA = detail.applicable === false;
                           const isPassing = hasScore
                             ? detail.score! >= detail.max_score! * 0.5
                             : detail.passed;
@@ -538,21 +538,25 @@ export default function ReportDetailPage() {
                               key={idx}
                               className="flex items-start gap-2 text-sm"
                             >
-                              {isPassing ? (
+                              {isNA ? (
+                                <Minus className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                              ) : isPassing ? (
                                 <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                               ) : (
                                 <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
                               )}
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
-                                  <span className="font-medium">{detail.criterion}</span>
-                                  {hasScore && (
+                                  <span className={`font-medium ${isNA ? "text-gray-400" : ""}`}>{detail.criterion}</span>
+                                  {isNA ? (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">N/A</span>
+                                  ) : hasScore && (
                                     <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
                                       {detail.score} av {detail.max_score}
                                     </span>
                                   )}
                                 </div>
-                                <span className="text-gray-600">{detail.comment}</span>
+                                <span className={`${isNA ? "text-gray-400" : "text-gray-600"}`}>{detail.comment}</span>
                               </div>
                             </div>
                           );

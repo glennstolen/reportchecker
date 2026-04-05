@@ -29,7 +29,10 @@ UPDATED_AGENTS = [
                 {"id": "innholdsfortegnelse", "label": "Innholdsfortegnelse", "weight": 15,
                  "description": "Egen side (unummerert)"},
                 {"id": "sammendrag_plassering", "label": "Sammendrag-plassering", "weight": 10,
-                 "description": "Sammendrag kommer etter innholdsfortegnelse og før introduksjon (rekkefølge verifisert fra tekststruktur)"},
+                 "description": ("Rapporten har en innholdsfortegnelse som lister opp seksjoner – dette er IKKE selve seksjonene. "
+                     "Den faktiske Sammendrag-seksjonen kjennetegnes ved at den inneholder flere setninger med eksperimentinnhold (hensikt, metoder, resultater). "
+                     "Sjekk at denne seksjonen kommer på en egen side (--- Side X ---) etter siden med innholdsfortegnelsen, "
+                     "og at Introduksjon-seksjonen starter på en annen side etter sammendraget.")},
                 {"id": "kapittelnummerering", "label": "Kapittelnummerering", "weight": 15,
                  "description": "Sammendrag unummerert, Intro-Diskusjon nummerert (1-5), Referanser/Vedlegg unummerert"},
                 {"id": "formatering", "label": "Konsistent formatering", "weight": 10,

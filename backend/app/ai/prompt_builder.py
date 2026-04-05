@@ -10,7 +10,7 @@ class EvaluationPrompt:
     full: str    # Combined prompt for storage/debugging
 
 
-SYSTEM_TEMPLATE = """Du er en ekspert på å vurdere akademiske rapporter, spesielt labrapporter i kjemi.
+SYSTEM_TEMPLATE = """Du er en ekspert på å vurdere akademiske rapporter, spesielt labrapporter i bioteknologi og biokjemi.
 
 ## Rapport-innhold
 
@@ -23,14 +23,14 @@ Gi en score per kriterium og konkret, konstruktiv tilbakemelding.
 
 Svar KUN med gyldig JSON i følgende format (ingen annen tekst):
 {{
-  "score": <total score - sum av alle kriterier>,
   "feedback": "<hovedtilbakemelding på 2-3 setninger>",
   "details": [
-    {{"criterion": "<kriterienavn>", "score": <oppnådd poeng>, "max_score": <maks poeng for dette kriteriet>, "comment": "<kort kommentar>"}}
+    {{"criterion": "<kriterienavn>", "score": <oppnådd poeng>, "max_score": <maks poeng for dette kriteriet>, "applicable": true, "comment": "<kort kommentar>"}}
   ]
 }}
 
 VIKTIG: For hvert kriterium, gi en score fra 0 til kriteriets vekt (max_score). Total score skal være summen av alle kriteriescore.
+Hvis et kriterium ikke er relevant for rapporten (f.eks. ingen ligninger = ligningsnummerering ikke aktuelt), sett "applicable": false og "score": <kriteriets maks vekt>. Kandidaten skal ikke straffes for noe som ikke er relevant.
 """
 
 USER_TEMPLATE = """## Evalueringskriterier
@@ -47,7 +47,7 @@ Gi en score fra 0 til 100.
 """
 
 # Legacy combined template for backwards compatibility
-DEFAULT_PROMPT_TEMPLATE = """Du er en ekspert på å vurdere akademiske rapporter, spesielt labrapporter i kjemi.
+DEFAULT_PROMPT_TEMPLATE = """Du er en ekspert på å vurdere akademiske rapporter, spesielt labrapporter i bioteknologi og biokjemi.
 
 ## Rapport-innhold
 
@@ -70,14 +70,14 @@ Gi en score fra 0 til 100 og konkret, konstruktiv tilbakemelding.
 
 Svar KUN med gyldig JSON i følgende format (ingen annen tekst):
 {{
-  "score": <total score - sum av alle kriterier>,
   "feedback": "<hovedtilbakemelding på 2-3 setninger>",
   "details": [
-    {{"criterion": "<kriterienavn>", "score": <oppnådd poeng>, "max_score": <maks poeng for dette kriteriet>, "comment": "<kort kommentar>"}}
+    {{"criterion": "<kriterienavn>", "score": <oppnådd poeng>, "max_score": <maks poeng for dette kriteriet>, "applicable": true, "comment": "<kort kommentar>"}}
   ]
 }}
 
 VIKTIG: For hvert kriterium, gi en score fra 0 til kriteriets vekt (max_score). Total score skal være summen av alle kriteriescore.
+Hvis et kriterium ikke er relevant for rapporten (f.eks. ingen ligninger = ligningsnummerering ikke aktuelt), sett "applicable": false og "score": <kriteriets maks vekt>. Kandidaten skal ikke straffes for noe som ikke er relevant.
 """
 
 
