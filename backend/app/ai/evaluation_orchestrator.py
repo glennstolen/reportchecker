@@ -79,7 +79,7 @@ class EvaluationOrchestrator:
             # Validate and clamp score
             score = data.get("score")
             if score is not None:
-                score = max(0, min(float(score), max_score))
+                score = max(0, min(float(score), 100.0))
 
             return {
                 "score": score,

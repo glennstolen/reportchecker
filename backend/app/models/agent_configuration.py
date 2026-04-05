@@ -17,10 +17,8 @@ class AgentConfiguration(Base):
     # Format: {"checkItems": [...], "scoringRubric": "..."}
     criteria = Column(JSON, nullable=False, default=dict)
 
+    # max_score doubles as the percentage weight in the total score (all agents sum to 100)
     max_score = Column(Float, default=10.0)
-
-    # Whether this agent is enabled by default in the evaluation UI
-    default_enabled = Column(Boolean, default=True)
 
     # Custom prompt template (optional - uses default if not set)
     prompt_template = Column(Text, nullable=True)

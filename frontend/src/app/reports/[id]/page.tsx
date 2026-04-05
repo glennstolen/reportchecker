@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Play, CheckCircle, XCircle, Clock, AlertCircle, ChevronDown, ChevronUp, Loader2, UserX, Download } from "lucide-react";
+import { Play, CheckCircle, XCircle, Clock, AlertCircle, ChevronDown, ChevronUp, Loader2, UserX, Download, List } from "lucide-react";
 
 interface Report {
   id: number;
@@ -20,7 +20,6 @@ interface Agent {
   name: string;
   description: string;
   max_score: number;
-  default_enabled: boolean;
 }
 
 interface CriterionDetail {
@@ -74,7 +73,6 @@ export default function ReportDetailPage() {
 
   const [report, setReport] = useState<Report | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [selectedAgents, setSelectedAgents] = useState<number[]>([]);
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [evaluating, setEvaluating] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -116,9 +114,6 @@ export default function ReportDetailPage() {
       .then(([reportData, agentsData, evaluationsData]) => {
         setReport(reportData);
         setAgents(agentsData);
-        // Pre-select agents that are enabled by default
-        setSelectedAgents(agentsData.filter((a: Agent) => a.default_enabled).map((a: Agent) => a.id));
-        // Show latest evaluation if exists
         if (evaluationsData.length > 0) {
           setEvaluation(evaluationsData[0]);
         }
@@ -126,15 +121,7 @@ export default function ReportDetailPage() {
       .finally(() => setLoading(false));
   }, [reportId]);
 
-  const toggleAgent = (id: number) => {
-    setSelectedAgents((prev) =>
-      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
-    );
-  };
-
   const runEvaluation = async () => {
-    if (selectedAgents.length === 0) return;
-
     setEvaluating(true);
     setStreamingAgents(new Map());
     setEvaluation(null);
@@ -145,7 +132,6 @@ export default function ReportDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           report_id: parseInt(reportId),
-          agent_config_ids: selectedAgents,
         }),
       });
 
@@ -334,34 +320,31 @@ export default function ReportDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column: Agent selection */}
+        {/* Left column: Agents overview + start button */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow-sm border p-4">
-            <h2 className="text-lg font-semibold mb-4">Velg agenter</h2>
+            <div className="flex items-center gap-2 mb-4">
+              <List className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-semibold">Sjekker</h2>
+            </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1">
               {agents.map((agent) => (
-                <label
-                  key={agent.id}
-                  className="flex items-start gap-3 p-3 rounded-md hover:bg-gray-50 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedAgents.includes(agent.id)}
-                    onChange={() => toggleAgent(agent.id)}
-                    className="mt-1"
-                  />
-                  <div>
-                    <p className="font-medium text-gray-900">{agent.name}</p>
-                    <p className="text-sm text-gray-600">{agent.description}</p>
+                <div key={agent.id} className="py-2 px-1 border-b last:border-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-900">{agent.name}</p>
+                    <span className="text-xs text-gray-500 ml-2 shrink-0">{agent.max_score}%</span>
                   </div>
-                </label>
+                  {agent.description && agent.name === "Innholdssjekker" && (
+                    <p className="text-xs text-gray-500 mt-0.5">{agent.description}</p>
+                  )}
+                </div>
               ))}
             </div>
 
             <button
               onClick={runEvaluation}
-              disabled={selectedAgents.length === 0 || evaluating || report.status.toUpperCase() !== "READY" || !report.anonymized_file_path}
+              disabled={evaluating || report.status.toUpperCase() !== "READY" || !report.anonymized_file_path}
               className="w-full mt-4 flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play className="w-4 h-4" />
@@ -408,22 +391,19 @@ export default function ReportDetailPage() {
               {/* Agent list with status */}
               <div className="space-y-3">
                 {streamingAgents.size === 0 ? (
-                  /* Initial loading - show selected agents as pending */
-                  selectedAgents.map((agentId) => {
-                    const agentInfo = agents.find((a) => a.id === agentId);
-                    return (
-                      <div
-                        key={agentId}
-                        className="flex items-center gap-4 p-4 rounded-lg border bg-gray-50 border-gray-200 animate-pulse"
-                      >
-                        <Clock className="w-6 h-6 text-gray-400" />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900">{agentInfo?.name}</p>
-                          <p className="text-sm text-gray-600 truncate">{agentInfo?.description}</p>
-                        </div>
+                  /* Initial loading - show all agents as pending */
+                  agents.map((agent) => (
+                    <div
+                      key={agent.id}
+                      className="flex items-center gap-4 p-4 rounded-lg border bg-gray-50 border-gray-200 animate-pulse"
+                    >
+                      <Clock className="w-6 h-6 text-gray-400" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900">{agent.name}</p>
+                        <p className="text-sm text-gray-600 truncate">{agent.description}</p>
                       </div>
-                    );
-                  })
+                    </div>
+                  ))
                 ) : (
                   Array.from(streamingAgents.values()).map((agent) => (
                   <div
@@ -458,10 +438,10 @@ export default function ReportDetailPage() {
                     </div>
 
                     {/* Score (when completed) */}
-                    {agent.status === "completed" && agent.score !== undefined && (
+                    {agent.status === "completed" && agent.score !== undefined && agent.score !== null && (
                       <div className="flex-shrink-0 text-right">
                         <p className="text-lg font-bold text-gray-900">
-                          {agent.score?.toFixed(1)} / {agent.max_score}
+                          {((agent.score / 100) * agent.max_score).toFixed(1)} / {agent.max_score} p
                         </p>
                       </div>
                     )}
@@ -532,9 +512,9 @@ export default function ReportDetailPage() {
                       </h3>
                       <div className="flex items-center gap-2">
                         {getStatusIcon(result.status)}
-                        {result.score !== null && (
+                        {result.score !== null && result.max_score !== null && (
                           <span className="font-semibold">
-                            {result.score.toFixed(1)} / {result.max_score?.toFixed(1)}
+                            {((result.score / 100) * result.max_score!).toFixed(1)} / {result.max_score} p
                           </span>
                         )}
                       </div>

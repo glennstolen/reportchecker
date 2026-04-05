@@ -29,8 +29,7 @@ async def create_evaluation(
     evaluation: EvaluationCreate,
     db: Session = Depends(get_db),
 ):
-    """Start a new evaluation of a report with selected agents."""
-    # Validate report exists
+    """Start a new evaluation of a report using all agents."""
     report = db.query(Report).filter(Report.id == evaluation.report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -41,14 +40,7 @@ async def create_evaluation(
             detail="Report has not been processed yet. Please wait for processing to complete.",
         )
 
-    # Validate all agent configs exist
-    agents = (
-        db.query(AgentConfiguration)
-        .filter(AgentConfiguration.id.in_(evaluation.agent_config_ids))
-        .all()
-    )
-    if len(agents) != len(evaluation.agent_config_ids):
-        raise HTTPException(status_code=404, detail="One or more agent configurations not found")
+    agents = db.query(AgentConfiguration).order_by(AgentConfiguration.id).all()
 
     service = EvaluationService(db)
     db_evaluation = await service.create_and_run_evaluation(report, agents)
@@ -62,7 +54,6 @@ async def create_evaluation_stream(
     db: Session = Depends(get_db),
 ):
     """Start a new evaluation with streaming updates via SSE."""
-    # Validate report exists
     report = db.query(Report).filter(Report.id == evaluation.report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -73,14 +64,7 @@ async def create_evaluation_stream(
             detail="Report has not been processed yet.",
         )
 
-    # Validate all agent configs exist
-    agents = (
-        db.query(AgentConfiguration)
-        .filter(AgentConfiguration.id.in_(evaluation.agent_config_ids))
-        .all()
-    )
-    if len(agents) != len(evaluation.agent_config_ids):
-        raise HTTPException(status_code=404, detail="One or more agent configurations not found")
+    agents = db.query(AgentConfiguration).order_by(AgentConfiguration.id).all()
 
     async def generate_stream():
         import asyncio
@@ -213,21 +197,14 @@ async def create_evaluation_stream(
         # Commit all results to database
         db.commit()
 
-        # Calculate totals - normalize to 100
-        raw_score = sum(
-            r.score for r in agent_results.values() if r.score is not None
-        )
-        raw_max = sum(
-            r.max_score for r in agent_results.values() if r.max_score is not None
+        # Claude scores 0-100 per agent. Contribution = (score/100) * agent.max_score (percentage weight).
+        total_score = sum(
+            (r.score / 100) * r.max_score
+            for r in agent_results.values()
+            if r.score is not None
         )
 
-        # Normalize score to percentage of 100
-        if raw_max > 0:
-            normalized_score = (raw_score / raw_max) * 100
-        else:
-            normalized_score = 0
-
-        db_evaluation.total_score = round(normalized_score, 1)
+        db_evaluation.total_score = round(total_score, 1)
         db_evaluation.max_possible_score = 100.0
         db_evaluation.status = EvaluationStatus.COMPLETED
         db_evaluation.completed_at = datetime.utcnow()

@@ -43,7 +43,7 @@ Kriterier å sjekke:
 
 Vurderingsmal: {scoring_rubric}
 
-Gi en score fra 0 til {max_score}.
+Gi en score fra 0 til 100.
 """
 
 # Legacy combined template for backwards compatibility
@@ -66,7 +66,7 @@ Vurderingsmal: {scoring_rubric}
 ## Instruksjoner
 
 Vurder rapporten basert på kriteriene over.
-Gi en score fra 0 til {max_score} og konkret, konstruktiv tilbakemelding.
+Gi en score fra 0 til 100 og konkret, konstruktiv tilbakemelding.
 
 Svar KUN med gyldig JSON i følgende format (ingen annen tekst):
 {{

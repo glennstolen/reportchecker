@@ -66,16 +66,14 @@ class EvaluationService:
                     agent_result.status = EvaluationStatus.ERROR
                     agent_result.error_message = "No result returned"
 
-            # Calculate totals
+            # Claude scores 0-100 per agent. Contribution = (score/100) * agent.max_score (percentage weight).
             total_score = sum(
-                r.score for r in evaluation.agent_results if r.score is not None
+                (r.score / 100) * r.max_score
+                for r in evaluation.agent_results
+                if r.score is not None and r.max_score is not None
             )
-            max_possible = sum(
-                r.max_score for r in evaluation.agent_results if r.max_score is not None
-            )
-
-            evaluation.total_score = total_score
-            evaluation.max_possible_score = max_possible
+            evaluation.total_score = round(total_score, 1)
+            evaluation.max_possible_score = 100.0
             evaluation.status = EvaluationStatus.COMPLETED
             evaluation.completed_at = datetime.utcnow()
 

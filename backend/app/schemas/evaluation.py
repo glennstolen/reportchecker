@@ -5,7 +5,6 @@ from typing import Optional, Any
 
 class EvaluationCreate(BaseModel):
     report_id: int
-    agent_config_ids: list[int]
 
 
 class AgentResultResponse(BaseModel):
