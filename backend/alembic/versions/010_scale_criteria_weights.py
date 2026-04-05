@@ -48,10 +48,8 @@ UPDATED_AGENTS = [
             "checkItems": [
                 {"id": "egenprodusert", "label": "Egenprodusert tekst", "weight": 25,
                  "description": "Teksten er skrevet med egne ord, ikke kopiert"},
-                {"id": "tillatte_kilder", "label": "Tillatte kilder", "weight": 15,
-                 "description": "Bruker lærebok, vitenskapelige artikler, offentlige nettsider"},
-                {"id": "ikke_tillatte", "label": "Unngår ikke-tillatte kilder", "weight": 15,
-                 "description": "Unngår Wikipedia, forelesningsnotater, Canvas-teori (unntak: forsøksbeskrivelse)"},
+                {"id": "tillatte_kilder", "label": "Tillatte kilder", "weight": 30,
+                 "description": "Bruker lærebok (Clark et al.), vitenskapelige artikler og offentlige nettsider som forventet. Ingen Wikipedia eller Canvas-teori brukt. Forsøksbeskrivelse fra OsloMet er korrekt brukt"},
                 {"id": "referansestil", "label": "Konsekvent referansestil", "weight": 15,
                  "description": "IEEE eller APA brukt konsekvent"},
                 {"id": "intext", "label": "In-text referanser", "weight": 15,
