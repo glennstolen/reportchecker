@@ -29,7 +29,7 @@ UPDATED_AGENTS = [
                 {"id": "innholdsfortegnelse", "label": "Innholdsfortegnelse", "weight": 15,
                  "description": "Egen side (unummerert)"},
                 {"id": "sammendrag_plassering", "label": "Sammendrag-plassering", "weight": 10,
-                 "description": "Sammendrag på egen side, sidenummerering starter her"},
+                 "description": "Sammendrag kommer etter innholdsfortegnelse og før introduksjon (rekkefølge verifisert fra tekststruktur)"},
                 {"id": "kapittelnummerering", "label": "Kapittelnummerering", "weight": 15,
                  "description": "Sammendrag unummerert, Intro-Diskusjon nummerert (1-5), Referanser/Vedlegg unummerert"},
                 {"id": "formatering", "label": "Konsistent formatering", "weight": 10,
