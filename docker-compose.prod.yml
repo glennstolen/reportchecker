@@ -54,6 +54,7 @@ services:
       MINIO_SECRET_KEY: minioadmin123
       MINIO_BUCKET: reports
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     depends_on:
       db:
         condition: service_healthy
