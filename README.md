@@ -1,18 +1,22 @@
 # ReportChecker
 
-AI-assistert vurdering av labrapporter for universitetsforelesere.
+AI-assistert vurdering av labrapporter i bioteknologi og biokjemi.
 
 ## Funksjoner
 
-- Last opp PDF/Word-rapporter
-- Konfigurerbare AI-agenter som sjekker ulike aspekter:
-  - Formaliteter (struktur, tittelside, sidetall)
-  - Kildereferanser (format, in-text citations)
-  - Figurer og tabeller (tekster, kvalitet)
-  - Språk og grammatikk
-  - Sammendrag/abstract
-- Parallell evaluering med flere agenter
-- Detaljert tilbakemelding per kriterie
+- Last opp PDF- eller Word-rapporter
+- 7 forhåndskonfigurerte sjekkere som evaluerer ulike aspekter:
+  - **Formalitetssjekker** – tittelside, innholdsfortegnelse, kapittelstruktur (3%)
+  - **Kildesjekker** – kildebruk, referansestil, in-text-referanser (3%)
+  - **Figur-, tabell- og ligningssjekker** – tekster, grafer, ligningsnummerering (2%)
+  - **Språksjekker** – grammatikk, tidsbruk, akademisk tone (2%)
+  - **Sammendragssjekker** – innhold, lengde, struktur (2%)
+  - **Innholdssjekker** – faglig innhold i alle kapitler (85%)
+  - **Helhetsvurdering** – rød tråd, lesbarhet, profesjonelt inntrykk (3%)
+- Parallell evaluering med live framdriftsvising
+- Score per kriterie med detaljert tilbakemelding
+- Anonymisering av rapporter (fjern navn, behold kandidatnummer)
+- PDF-eksport av evalueringsresultater
 
 ## Teknisk stack
 
@@ -20,14 +24,38 @@ AI-assistert vurdering av labrapporter for universitetsforelesere.
 - **Backend:** Python FastAPI
 - **Database:** PostgreSQL
 - **Fillagring:** MinIO (S3-kompatibel)
+- **Oppgavekø:** Redis + Celery
 - **AI:** Claude API (Anthropic)
 
-## Oppsett
+---
+
+## Installasjon for sluttbrukere (Windows)
+
+### Forutsetninger
+
+- [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/) installert og startet
+- En [Anthropic API-nøkkel](https://console.anthropic.com/)
+
+### Steg
+
+1. Last ned `ReportChecker-Setup.exe` fra [siste release](../../releases/latest)
+2. Kjør installasjonsfilen og følg veiviseren
+3. Oppgi Anthropic API-nøkkel når du blir bedt om det
+4. Klikk **"Start ReportChecker"** på skrivebordet
+
+**NB:** Første oppstart tar noen minutter mens Docker laster ned nødvendige komponenter (~1 GB).
+
+Appen åpnes automatisk i nettleseren på `http://localhost:3000`.
+
+---
+
+## Utviklingsoppsett
 
 ### Forutsetninger
 
 - Docker og Docker Compose
-- Node.js 18+
+- Python 3.12+ med venv
+- Node.js 20+
 - En Anthropic API-nøkkel
 
 ### 1. Konfigurer miljøvariabler
@@ -39,111 +67,99 @@ cp .env.example .env
 Rediger `.env` og legg inn din Anthropic API-nøkkel:
 
 ```
-ANTHROPIC_API_KEY=din_api_nøkkel_her
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### 2. Start infrastruktur (database, Redis, MinIO)
+### 2. Start tjenester og kjør migrasjoner
 
 ```bash
 docker compose up -d db redis minio
-```
 
-### 3. Kjør database-migrasjoner
-
-```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # På Windows: venv\Scripts\activate
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 alembic upgrade head
 ```
 
-### 4. Start backend
+### 3. Start backend og frontend
 
 ```bash
-# Fortsatt i backend-mappen med venv aktivert
+# Terminal 1 – backend (fra backend/ med venv aktivert)
 uvicorn app.main:app --reload
-```
 
-Backend kjører nå på http://localhost:8000
-
-### 5. Start frontend
-
-```bash
-cd frontend
+# Terminal 2 – frontend (fra frontend/)
 npm install
 npm run dev
 ```
 
-Frontend kjører nå på http://localhost:3000
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- Swagger UI: http://localhost:8000/docs
 
-## Alternativ: Kjør alt med Docker
+### Alternativ: Kjør alt med Docker (Linux)
 
 ```bash
 docker compose up -d
 ```
 
-Dette starter alle tjenester. Frontend på port 3000, backend på port 8000.
+---
 
 ## Bruk
 
 1. Åpne http://localhost:3000
-2. Klikk "Last opp rapport" og velg en PDF eller Word-fil
+2. Klikk **"Last opp rapport"** og velg en PDF eller Word-fil
 3. Vent til rapporten er prosessert (status: "Klar")
-4. Velg hvilke agenter som skal evaluere rapporten
-5. Klikk "Start evaluering"
-6. Se detaljerte resultater med score og tilbakemelding
+4. Klikk **"Start evaluering"**
+5. Se detaljerte resultater med score og tilbakemelding per kriterie
 
-## Agent-konfigurasjon
+---
 
-Du kan lage egne agenter under "Agenter"-fanen:
+## Lage en ny release (Windows-installer)
 
-1. Klikk "Ny agent"
-2. Gi agenten et navn og beskrivelse
-3. Legg til evalueringskriterier med vekt
-4. Skriv eventuelt en vurderingsmal
-
-Eller dupliser en av de ferdiglagde templates og tilpass den.
-
-## API-dokumentasjon
-
-Swagger UI: http://localhost:8000/docs
-
-### Hovedendepunkter
-
-- `POST /api/reports/upload` - Last opp rapport
-- `GET /api/reports` - Liste rapporter
-- `POST /api/agents` - Opprett agent
-- `GET /api/agents` - Liste agenter
-- `POST /api/evaluations` - Start evaluering
-- `GET /api/evaluations/{id}` - Hent resultater
-
-## Utvikling
-
-### Backend-tester
+Når du er klar til å distribuere en ny versjon:
 
 ```bash
-cd backend
-pytest
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
-### Kodestruktur
+GitHub Actions bygger da automatisk:
+1. Backend-image (`Dockerfile.prod`) og frontend-image pushet til `ghcr.io`
+2. `ReportChecker-Setup.exe` via Inno Setup på Windows-runner
+3. Installer-filen lastes opp som asset på GitHub Release-siden
+
+Brukere laster ned `.exe`-filen fra [Releases](../../releases).
+
+---
+
+## Kodestruktur
 
 ```
 reportchecker/
-├── frontend/          # Next.js app
+├── frontend/                  # Next.js app
+│   ├── Dockerfile             # Produksjons-image
 │   └── src/
-│       ├── app/       # Sider
-│       ├── components/# React-komponenter
-│       └── types/     # TypeScript-typer
-├── backend/           # FastAPI app
+│       ├── app/               # Sider (Next.js App Router)
+│       ├── components/        # React-komponenter
+│       └── types/             # TypeScript-typer
+├── backend/                   # FastAPI app
+│   ├── Dockerfile             # Utviklings-image (med corp-certs)
+│   ├── Dockerfile.prod        # Produksjons-image (uten corp-certs)
 │   ├── app/
-│   │   ├── api/       # API-ruter
-│   │   ├── models/    # Database-modeller
-│   │   ├── services/  # Forretningslogikk
-│   │   └── ai/        # AI-evaluering
-│   └── alembic/       # Migrasjoner
-└── docker-compose.yml
+│   │   ├── api/               # API-ruter
+│   │   ├── models/            # Database-modeller
+│   │   ├── services/          # Forretningslogikk
+│   │   └── ai/                # Claude-evaluering
+│   └── alembic/               # Databasemigrasjoner
+├── installer/                 # Windows-installer
+│   ├── reportchecker.iss      # Inno Setup-script
+│   ├── start.bat              # Starter alle tjenester
+│   └── stop.bat               # Stopper alle tjenester
+├── docker-compose.yml         # Utviklingsmiljø (Linux, network_mode: host)
+├── docker-compose.prod.yml    # Produksjonsmiljø (Windows-kompatibel)
+└── .github/workflows/
+    └── build-release.yml      # Bygger images + installer ved tagging
 ```
 
 ## Lisens
