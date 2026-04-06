@@ -24,7 +24,7 @@ PrivilegesRequired=lowest
 Name: "norwegian"; MessagesFile: "compiler:Languages\Norwegian.isl"
 
 [Files]
-Source: "docker-compose.prod.yml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\docker-compose.prod.yml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "start.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "stop.bat"; DestDir: "{app}"; Flags: ignoreversion
 
