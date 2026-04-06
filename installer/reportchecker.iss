@@ -92,6 +92,8 @@ begin
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
 begin
   Result := '';
   if not CheckDockerInstalled then
@@ -100,11 +102,11 @@ begin
       'Docker Desktop er ikke installert eller ikke startet.' + #13#10#13#10 +
       'ReportChecker krever Docker Desktop for a kjore.' + #13#10 +
       'Last ned fra: https://www.docker.com/products/docker-desktop/' + #13#10#13#10 +
-      'Installer Docker Desktop, start det, og kj"r dette installasjons-programmet pa nytt.' + #13#10#13#10 +
+      'Installer Docker Desktop, start det, og kj"r dette installasjonsprogrammet pa nytt.' + #13#10#13#10 +
       'Vil du apne nedlastingssiden na?',
       mbConfirmation, MB_YESNO) = IDYES then
     begin
-      ShellExec('open', 'https://www.docker.com/products/docker-desktop/', '', '', SW_SHOW, ewNoWait, 0);
+      ShellExec('open', 'https://www.docker.com/products/docker-desktop/', '', '', SW_SHOW, ewNoWait, ResultCode);
     end;
     Result := 'Docker Desktop ma vaere installert og startet for ReportChecker kan installeres.';
   end;
