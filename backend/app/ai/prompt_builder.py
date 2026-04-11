@@ -30,7 +30,14 @@ Svar KUN med gyldig JSON i følgende format (ingen annen tekst):
 }}
 
 VIKTIG: For hvert kriterium, gi en score fra 0 til kriteriets vekt (max_score). Total score skal være summen av alle kriteriescore.
-Hvis et kriterium ikke er relevant for rapporten (f.eks. ingen ligninger = ligningsnummerering ikke aktuelt), sett "applicable": false og "score": <kriteriets maks vekt>. Kandidaten skal ikke straffes for noe som ikke er relevant.
+Hvis et kriterium ikke er relevant for rapporten (f.eks. ingen ligninger = ligningsnummerering ikke aktuelt), sett "applicable": false og "score": 0. Slike kriterier holdes utenfor totalscoren automatisk.
+
+STRENGHETSINSTRUKSJON: Vær kritisk og realistisk i vurderingen. En gjennomsnittlig rapport bør score rundt 55–65 %, ikke 75–80 %. Gi IKKE poeng for innhold som er uklart, mangelfullt eller fraværende. Bruk hele skalaen:
+- 0–30 %: Mangler de fleste krav, store faglige mangler (stryk-nivå)
+- 30–50 %: Oppfyller noen krav, men vesentlige mangler (D-nivå)
+- 50–70 %: Tilfredsstillende med tydelige svakheter (C-nivå)
+- 70–85 %: Godt arbeid med noen mangler (B-nivå)
+- 85–100 %: Fremragende, nesten ingen mangler (A-nivå)
 """
 
 USER_TEMPLATE = """## Evalueringskriterier

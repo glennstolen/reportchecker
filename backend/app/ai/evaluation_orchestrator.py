@@ -78,14 +78,25 @@ class EvaluationOrchestrator:
 
             details = data.get("details", [])
 
-            # Compute total from per-criterion scores rather than trusting Claude's
-            # top-level "score" field, which can be an inconsistent holistic estimate.
-            computed_score = sum(
+            # Only include applicable criteria in scoring.
+            # Non-applicable items (applicable: false) are excluded from both
+            # numerator and denominator so they don't inflate or deflate the score.
+            applicable = [d for d in details if d.get("applicable", True) is not False]
+            total_max = sum(
+                float(d["max_score"])
+                for d in applicable
+                if isinstance(d.get("max_score"), (int, float))
+            )
+            total_score = sum(
                 float(d["score"])
-                for d in details
+                for d in applicable
                 if isinstance(d.get("score"), (int, float))
             )
-            score = max(0, min(computed_score, 100.0))
+            if total_max > 0:
+                score = (total_score / total_max) * 100
+            else:
+                score = 0
+            score = max(0, min(score, 100.0))
 
             return {
                 "score": score,

@@ -13,3 +13,10 @@ class AgentConfigResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AgentConfigUpdate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    max_score: float
+    criteria: dict

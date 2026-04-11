@@ -25,26 +25,24 @@ AGENT_TEMPLATES = [
         "max_score": 3.0,
         "criteria": {
             "checkItems": [
-                {"id": "tittelside", "label": "Tittelside", "weight": 20,
+                {"id": "tittelside", "label": "Tittelside", "weight": 10,
                  "description": "Egen side (unummerert) med tittel, kandidatnummer, oppgave, dato, emne, institusjon"},
                 {"id": "innholdsfortegnelse", "label": "Innholdsfortegnelse", "weight": 15,
                  "description": "Egen side (unummerert)"},
                 {"id": "sammendrag_plassering", "label": "Sammendrag-plassering", "weight": 10,
                  "description": (
-                     "Rapporten har en innholdsfortegnelse som lister opp seksjoner – dette er IKKE selve seksjonene. "
-                     "Den faktiske Sammendrag-seksjonen kjennetegnes ved at den inneholder flere setninger med eksperimentinnhold (hensikt, metoder, resultater). "
-                     "Sjekk at denne seksjonen kommer på en egen side (--- Side X ---) etter siden med innholdsfortegnelsen, "
-                     "og at Introduksjon-seksjonen starter på en annen side etter sammendraget.")},
+                     "Sammendrag er avsnittet/seksjonen som begynner med en linje hvor det står \"Sammendrag\" eller \"SAMMENDRAG\" uten mer på den linjen. "
+                     "Sammendraget skal komme etter innholdsfortegnelsen på en egen side, på siden etter kommer Introduksjon-seksjonen.")},
                 {"id": "kapittelnummerering", "label": "Kapittelnummerering", "weight": 15,
                  "description": "Sammendrag unummerert, Intro-Diskusjon nummerert (1-5), Referanser/Vedlegg unummerert"},
-                {"id": "formatering", "label": "Konsistent formatering", "weight": 10,
+                {"id": "formatering", "label": "Konsistent formatering", "weight": 15,
                  "description": "Lesbar font, passende størrelse, god lesbarhet"},
-                {"id": "lengde", "label": "Passende lengde", "weight": 10,
+                {"id": "lengde", "label": "Passende lengde", "weight": 15,
                  "description": "Ikke for kort eller for lang for oppgavens omfang"},
                 {"id": "rod_trad", "label": "Rød tråd", "weight": 20,
                  "description": "Logisk sammenheng gjennom hele rapporten"},
             ],
-            "scoringRubric": "Gi poeng basert på hvor godt hvert kriterie er oppfylt. Total score 0-100. Rapporten skal inneholde kandidatnummer (IKKE navn)."
+            "scoringRubric": "Vurder formelle krav strengt. 0–30: Mangler tittelside, innholdsfortegnelse eller korrekt struktur. 30–50: Noen formelle krav oppfylt, men vesentlige mangler (f.eks. feil sideoppsett). 50–70: De fleste krav oppfylt, men med tydelige feil i nummerering eller plassering. 70–85: Godt arbeid, kun mindre formelle feil. 85–100: Alle formelle krav korrekt oppfylt."
         }
     },
     {
@@ -66,7 +64,7 @@ AGENT_TEMPLATES = [
                 {"id": "kildekvalitet", "label": "Kildekvalitet", "weight": 5,
                  "description": "Fagfellevurderte kilder prioritert"},
             ],
-            "scoringRubric": "Vurder om rapporten bruker egne formuleringer og siterer kilder korrekt. Total score 0-100. Trekk for Wikipedia, Canvas-teori eller manglende referanser."
+            "scoringRubric": "Vurder kildebruk strengt. 0–30: Teksten er kopiert eller svært lite egenprodusert, og/eller ulovlige kilder (Wikipedia, Canvas-teori) dominerer. 30–50: Noen korrekte kilder brukt, men stor andel feil eller manglende referanser. 50–70: Tilfredsstillende kildebruk med noen feil i stil eller in-text-referanser. 70–85: God kildebruk, konsekvent referansestil med mindre feil. 85–100: Eksemplarisk kildebruk, korrekt og konsekvent referansestil gjennomgående. Trekk for Wikipedia, Canvas-teori eller manglende in-text-referanser der påstander fremsettes."
         }
     },
     {
@@ -92,7 +90,7 @@ AGENT_TEMPLATES = [
                 {"id": "radata", "label": "Rådata plassering", "weight": 15,
                  "description": "Rådata i vedlegg, ikke i hoveddelen"},
             ],
-            "scoringRubric": "Vurder formatering av figurer, tabeller og ligninger. Total score 0-100. Sjekk at figur-/tabelltekster er korrekt plassert og at ligninger er nummerert."
+            "scoringRubric": "Vurder formatering av figurer, tabeller og ligninger strengt. 0–30: Figurtekst over figurer, tabelltekst under tabeller, eller ligninger unummerert gjennomgående. 30–50: Flere formateringsfeil, men noe er riktig. 50–70: Tilfredsstillende formatering med noen feil i plassering eller nummerering. 70–85: Godt arbeid, kun enkeltstående feil. 85–100: Korrekt formatering gjennomgående. Sjekk spesielt at figurtekst er UNDER og tabelltekst er OVER."
         }
     },
     {
@@ -118,7 +116,7 @@ AGENT_TEMPLATES = [
                 {"id": "fagterminologi", "label": "Fagterminologi", "weight": 15,
                  "description": "Korrekt bruk av fagtermer"},
             ],
-            "scoringRubric": "Vurder språklig kvalitet, korrekt bruk av tid i ulike kapitler, og akademisk tone. Total score 0-100. Trekk for 'jeg', vage formuleringer eller feil tid."
+            "scoringRubric": "Vurder språklig kvalitet strengt. 0–30: Store grammatikkfeil, feil tid brukt gjennomgående, eller uakademisk språk dominerer. 30–50: Vesentlige feil i tidsbruk per kapittel og/eller hyppig bruk av 'jeg', vage ord og adjektiver. 50–70: Tilfredsstillende, men tydelige svakheter i akademisk tone eller tidsbruk i ett eller flere kapitler. 70–85: Godt språk med noen enkeltstående feil. 85–100: Akademisk og korrekt norsk gjennomgående. Trekk for 'jeg', 'veldig', 'ganske', konkrete tidsangivelser og feil verbal tid."
         }
     },
     {
@@ -144,47 +142,49 @@ AGENT_TEMPLATES = [
                 {"id": "ingen_ref_fig", "label": "Ingen referanser/figurer", "weight": 5,
                  "description": "Inneholder IKKE referanser, figurer eller tabeller"},
             ],
-            "scoringRubric": "Vurder om sammendraget gir et komplett bilde av forsøket på maks halv side. Total score 0-100. Trekk for referanser, figurer eller manglende elementer."
+            "scoringRubric": "Vurder sammendraget strengt. 0–30: Mangler de fleste obligatoriske elementer (hensikt, metoder, resultater, konklusjon). 30–50: Noen elementer tilstede, men vesentlige mangler eller sammendraget er for langt/kort. 50–70: De fleste elementer inkludert, men med tydelige svakheter i innhold eller struktur. 70–85: Godt sammendrag med noen mangler. 85–100: Komplett og selvstendig lesbart sammendrag innenfor halv side. Trekk for referanser, figurer eller tabeller i sammendraget."
         }
     },
     {
         "name": "Innholdssjekker",
-        "description": "Sjekker faglig innhold i alle kapitler (Introduksjon 18p, Metode 24p, Resultater 35p, Diskusjon+Konklusjon 23p)",
+        "description": "Sjekker faglig innhold i alle kapitler (Introduksjon 15p, Metode 20p, Resultater 30p, Diskusjon+Konklusjon 20p, Faglig korrekthet 15p)",
         "max_score": 85.0,
         "criteria": {
             "checkItems": [
-                {"id": "intro_hensikt", "label": "Introduksjon: Hensikt", "weight": 5,
+                {"id": "intro_hensikt", "label": "Introduksjon: Hensikt", "weight": 4,
                  "description": "Kort hensikt i fortid"},
-                {"id": "intro_teori", "label": "Introduksjon: Bakgrunnsteori", "weight": 8,
+                {"id": "intro_teori", "label": "Introduksjon: Bakgrunnsteori", "weight": 7,
                  "description": "Tilstrekkelig bakgrunnsteori og prinsipper for teknikker"},
-                {"id": "intro_underkapitler", "label": "Introduksjon: Struktur", "weight": 3,
+                {"id": "intro_underkapitler", "label": "Introduksjon: Struktur", "weight": 2,
                  "description": "Tematiske underkapitler, ligninger oppgis fortløpende"},
                 {"id": "intro_ikke_eksperiment", "label": "Introduksjon: Ikke eksperimentelt", "weight": 2,
                  "description": "IKKE eksperimentelle opplysninger"},
-                {"id": "metode_materialer", "label": "Metode: Materialer", "weight": 8,
+                {"id": "metode_materialer", "label": "Metode: Materialer", "weight": 7,
                  "description": "Materialer med produsentnavn, artikkelnummer, konsentrasjon"},
-                {"id": "metode_utstyr", "label": "Metode: Utstyr", "weight": 5,
+                {"id": "metode_utstyr", "label": "Metode: Utstyr", "weight": 4,
                  "description": "Utstyr med produsent og modell, instrumentinnstillinger"},
-                {"id": "metode_beskrivelse", "label": "Metode: Beskrivelse", "weight": 8,
+                {"id": "metode_beskrivelse", "label": "Metode: Beskrivelse", "weight": 7,
                  "description": "Passiv fortid, detaljert nok til å gjenta, henvisning til forsøksbeskrivelse"},
-                {"id": "metode_ikke_data", "label": "Metode: Ikke bearbeidede data", "weight": 3,
+                {"id": "metode_ikke_data", "label": "Metode: Ikke bearbeidede data", "weight": 2,
                  "description": "IKKE bearbeidede måledata"},
-                {"id": "resultat_innledning", "label": "Resultater: Innledning", "weight": 9,
+                {"id": "resultat_innledning", "label": "Resultater: Innledning", "weight": 8,
                  "description": "Innledende tekst før figurer/tabeller"},
-                {"id": "resultat_kronologisk", "label": "Resultater: Kronologisk", "weight": 17,
+                {"id": "resultat_kronologisk", "label": "Resultater: Kronologisk", "weight": 15,
                  "description": "Kronologisk presentasjon, beskrevet i tekst"},
-                {"id": "resultat_ikke", "label": "Resultater: Unngå", "weight": 9,
+                {"id": "resultat_ikke", "label": "Resultater: Unngå", "weight": 7,
                  "description": "IKKE forkastede forsøk, metodegjentagelse eller diskusjon"},
-                {"id": "diskusjon_oppsummering", "label": "Diskusjon: Oppsummering", "weight": 5,
+                {"id": "diskusjon_oppsummering", "label": "Diskusjon: Oppsummering", "weight": 4,
                  "description": "Kort oppsummering først"},
-                {"id": "diskusjon_sammenligning", "label": "Diskusjon: Sammenligning", "weight": 7,
+                {"id": "diskusjon_sammenligning", "label": "Diskusjon: Sammenligning", "weight": 6,
                  "description": "Sammenligning med teori/litteraturverdier"},
-                {"id": "diskusjon_feilkilder", "label": "Diskusjon: Feilkilder", "weight": 7,
+                {"id": "diskusjon_feilkilder", "label": "Diskusjon: Feilkilder", "weight": 6,
                  "description": "Feilkilder identifisert og effekt diskutert"},
-                {"id": "konklusjon", "label": "Konklusjon", "weight": 4,
+                {"id": "konklusjon", "label": "Diskusjon: Konklusjon", "weight": 4,
                  "description": "Ble hensikten oppnådd? Usikkerhetsvurdering"},
+                {"id": "faglig_korrekthet", "label": "Faglig korrekthet", "weight": 15,
+                 "description": "Vurder om rapporten inneholder faglige feil, misforståelser eller unøyaktige påstander innen bioteknologi og biokjemi. Påpek konkrete feil med forklaring."},
             ],
-            "scoringRubric": "Vurder innholdet i hvert hovedkapittel. Total score 0-100 (Introduksjon maks 18, Metode maks 24, Resultater maks 35, Diskusjon+Konklusjon maks 23). Sjekk at hvert kapittel inneholder riktige elementer og unngår feil plassering av innhold."
+            "scoringRubric": "Vurder faglig innhold strengt per kapittel (Introduksjon maks 15, Metode maks 20, Resultater maks 30, Diskusjon+Konklusjon maks 20, Faglig korrekthet maks 15). 0–30: Store faglige mangler i flere kapitler, feil plassering av innhold, mangler sentrale elementer. 30–50: Noen kapitler tilfredsstillende, men vesentlige faglige mangler eller feil struktur. 50–70: De fleste krav oppfylt per kapittel, men tydelige svakheter (f.eks. lite diskusjon av feilkilder, svak metodebeskrivelse). 70–85: Godt faglig innhold, kun mindre mangler. 85–100: Fremragende faglig innhold i alle kapitler. Sjekk at hvert kapittel inneholder riktige elementer og IKKE inneholder innhold som hører hjemme i andre kapitler."
         }
     },
     {
@@ -204,7 +204,7 @@ AGENT_TEMPLATES = [
                 {"id": "malgruppe", "label": "Målgruppe", "weight": 15,
                  "description": "Egnet for en leser med generelle kjemikunnskaper"},
             ],
-            "scoringRubric": "Gi en helhetsvurdering av rapportens kvalitet. Total score 0-100. Vurder om rapporten fungerer som en sammenhengende vitenskapelig tekst."
+            "scoringRubric": "Gi en helhetsvurdering av rapportens kvalitet. 0–30: Rapporten fremstår uferdig eller usammenhengende, vanskelig å følge for en leser. 30–50: Noe sammenheng, men tydelige brudd i rød tråd eller store svakheter i lesbarhet. 50–70: Tilfredsstillende helhet, men med merkbare svakheter i flyt eller profesjonelt inntrykk. 70–85: Godt helhetsinntrykk, leser ledes greit gjennom rapporten. 85–100: Profesjonell, vitenskapelig rapport med sterk rød tråd gjennomgående."
         }
     },
 ]
