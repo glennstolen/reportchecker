@@ -65,6 +65,7 @@ class ReportListResponse(BaseModel):
     latest_score: Optional[float] = None
     latest_max_score: Optional[float] = None
     is_anonymized: bool = False
+    candidate_mappings: Optional[list[dict]] = None
 
     class Config:
         from_attributes = True

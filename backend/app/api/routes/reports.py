@@ -83,6 +83,7 @@ def list_reports(db: Session = Depends(get_db)):
             latest_score=latest_eval.total_score if latest_eval else None,
             latest_max_score=latest_eval.max_possible_score if latest_eval else None,
             is_anonymized=report.anonymized_file_path is not None,
+            candidate_mappings=report.candidate_mappings,
         ))
 
     return result

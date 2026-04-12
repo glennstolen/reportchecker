@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { FileText, Plus, Trash2, Download } from "lucide-react";
 
+interface CandidateMapping {
+  name: string;
+  initials: string;
+  candidate_number: string;
+}
+
 interface Report {
   id: number;
   title: string;
@@ -14,6 +20,7 @@ interface Report {
   innleveringsdato: string | null;
   latest_score: number | null;
   latest_max_score: number | null;
+  candidate_mappings: CandidateMapping[] | null;
 }
 
 export default function ReportsPage() {
@@ -155,13 +162,19 @@ export default function ReportsPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {reports.map((report) => (
                 <tr key={report.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4">
                     <a
                       href={`/reports/${report.id}`}
                       className="text-blue-600 hover:text-blue-800 font-medium"
                     >
-                      {report.kandidater && report.kandidater.length > 0
-                        ? report.kandidater.join(", ")
+                      {report.candidate_mappings && report.candidate_mappings.length > 0
+                        ? report.candidate_mappings.map((m, i) => (
+                            <span key={i} className="block">{m.name} ({m.candidate_number})</span>
+                          ))
+                        : report.kandidater && report.kandidater.length > 0
+                        ? report.kandidater.map((k, i) => (
+                            <span key={i} className="block">{k}</span>
+                          ))
                         : "-"}
                     </a>
                   </td>
@@ -178,14 +191,9 @@ export default function ReportsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {report.latest_score !== null ? (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">
-                          {report.latest_score.toFixed(1)} / {report.latest_max_score?.toFixed(1)}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          ({((report.latest_score / (report.latest_max_score || 1)) * 100).toFixed(0)}%)
-                        </span>
-                      </div>
+                      <span className="font-medium text-gray-900">
+                        {((report.latest_score / (report.latest_max_score || 1)) * 100).toFixed(0)} %
+                      </span>
                     ) : (
                       <span className="text-sm text-gray-400">-</span>
                     )}
