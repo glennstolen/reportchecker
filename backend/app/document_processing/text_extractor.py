@@ -134,6 +134,75 @@ def extract_text_from_file(content: bytes, file_extension: str) -> str:
         raise ValueError(f"Unsupported file type: {file_extension}")
 
 
+_MIME_MAP = {
+    "jpeg": "image/jpeg",
+    "jpg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+    "webp": "image/webp",
+}
+
+
+def extract_images_from_pdf(
+    content: bytes,
+    min_dimension: int = 150,
+    max_images: int = 10,
+) -> list[dict]:
+    """Extract images from a PDF file.
+
+    Returns a list of dicts with keys:
+      data (bytes), media_type (str), width (int), height (int), page (int)
+    Only images larger than min_dimension x min_dimension are included.
+    At most max_images images are returned, in page order.
+    """
+    images = []
+    seen_xrefs: set[int] = set()
+
+    with fitz.open(stream=content, filetype="pdf") as doc:
+        for page_num, page in enumerate(doc):
+            for img_tuple in page.get_images(full=False):
+                xref = img_tuple[0]
+                width = img_tuple[2]
+                height = img_tuple[3]
+
+                if xref in seen_xrefs:
+                    continue
+                if width < min_dimension or height < min_dimension:
+                    continue
+
+                seen_xrefs.add(xref)
+
+                try:
+                    img_dict = doc.extract_image(xref)
+                    ext = img_dict.get("ext", "").lower()
+                    raw: bytes = img_dict["image"]
+                    media_type = _MIME_MAP.get(ext)
+
+                    if media_type is None:
+                        # Fallback: re-render unsupported formats (jpx, bmp, CMYK…) as PNG
+                        pix = fitz.Pixmap(doc, xref)
+                        if pix.n > 4:  # CMYK or similar → convert to RGB
+                            pix = fitz.Pixmap(fitz.csRGB, pix)
+                        raw = pix.tobytes("png")
+                        media_type = "image/png"
+
+                    images.append({
+                        "data": raw,
+                        "media_type": media_type,
+                        "width": width,
+                        "height": height,
+                        "page": page_num + 1,
+                    })
+
+                    if len(images) >= max_images:
+                        return images
+
+                except Exception:
+                    continue  # Skip unreadable images silently
+
+    return images
+
+
 def extract_text_from_pdf(content: bytes) -> str:
     """Extract text from a PDF file."""
     text_parts = []

@@ -11,8 +11,10 @@ from app.models.agent_configuration import AgentConfiguration
 from app.schemas.evaluation import EvaluationCreate, EvaluationResponse, AgentResultResponse
 from app.services.evaluation_service import EvaluationService
 from app.ai.claude_client import ClaudeClient
-from app.ai.prompt_builder import build_evaluation_prompt, build_system_prompt, build_user_prompt
+from app.ai.prompt_builder import build_evaluation_prompt, build_system_prompt, build_user_prompt, build_user_prompt_with_images
 from app.ai.evaluation_orchestrator import EvaluationOrchestrator
+from app.document_processing.text_extractor import extract_images_from_pdf
+from app.core.storage import StorageClient
 
 router = APIRouter()
 
@@ -106,6 +108,20 @@ async def create_evaluation_stream(
         # Build system prompt once (contains report) - this will be cached by Anthropic
         system_prompt = build_system_prompt(report.content_text)
 
+        # Extract images once for the whole evaluation (PDF only)
+        _IMAGE_AGENTS = {"innhold", "figur"}
+        report_images: list[dict] = []
+        pdf_path = report.anonymized_file_path or report.file_path
+        if pdf_path and pdf_path.lower().endswith(".pdf"):
+            try:
+                storage = StorageClient()
+                pdf_bytes = storage.download_file(pdf_path)
+                report_images = extract_images_from_pdf(pdf_bytes)
+                if report_images:
+                    print(f"Ekstraherte {len(report_images)} bilde(r) fra {pdf_path}")
+            except Exception as e:
+                print(f"Bildeekstraksjon feilet (fortsetter uten bilder): {e}")
+
         # Queue for collecting results from parallel tasks
         result_queue = asyncio.Queue()
 
@@ -125,10 +141,23 @@ async def create_evaluation_stream(
                 'agent_name': agent.name,
             })
 
+            # Build multimodal content for image-capable agents
+            if report_images and any(kw in agent.name.lower() for kw in _IMAGE_AGENTS):
+                import base64
+                user_content: str | list = [
+                    {"type": "text", "text": build_user_prompt_with_images(agent, len(report_images))},
+                    *[
+                        {"type": "image", "source": {"type": "base64", "media_type": img["media_type"], "data": base64.standard_b64encode(img["data"]).decode()}}
+                        for img in report_images
+                    ],
+                ]
+            else:
+                user_content = user_prompt
+
             full_response = ""
             try:
                 # Use cached evaluation - system prompt (report) is cached across agents
-                async for token in client.evaluate_with_cache(system_prompt, user_prompt):
+                async for token in client.evaluate_with_cache(system_prompt, user_content):
                     full_response += token
 
                 # Parse the complete response

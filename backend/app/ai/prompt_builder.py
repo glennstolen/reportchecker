@@ -157,6 +157,20 @@ def build_evaluation_prompt(
     )
 
 
+def build_user_prompt_with_images(agent: AgentConfiguration, image_count: int) -> str:
+    """Build user prompt with an addendum instructing Claude to actively evaluate the images."""
+    base = build_user_prompt(agent)
+    addendum = (
+        f"\n\n## Bilder fra rapporten\n"
+        f"Rapporten inneholder {image_count} bilde(r) vedlagt nedenfor (agarskåler, gelelektroforesebilder, grafer o.l.).\n\n"
+        f"VIKTIG: Bruk 'feedback'-feltet i JSON-svaret til å beskrive hva du konkret observerer i bildene, "
+        f"og om dette stemmer med studentens beskrivelser og konklusjoner. "
+        f"Eksempel: 'Gel-bilde side X viser bånd på ca. Y bp i brønn Z, som [stemmer/ikke stemmer] med studentens påstand om ...'. "
+        f"Bruk deretter bildene aktivt i vurderingen av kriteriene, spesielt 'Faglig korrekthet' og 'Resultater: Kronologisk'."
+    )
+    return base + addendum
+
+
 def build_evaluation_prompt_cached(
     report_text: str,
     agent: AgentConfiguration,

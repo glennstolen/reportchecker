@@ -1,6 +1,6 @@
 import httpx
 import anthropic
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Union
 from app.config import get_settings
 
 
@@ -53,7 +53,7 @@ class ClaudeClient:
     async def evaluate_with_cache(
         self,
         system_content: str,
-        user_content: str,
+        user_content: Union[str, list],
     ) -> AsyncGenerator[str, None]:
         """
         Stream evaluation with prompt caching.
