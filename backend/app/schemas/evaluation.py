@@ -5,6 +5,7 @@ from typing import Optional, Any
 
 class EvaluationCreate(BaseModel):
     report_id: int
+    agent_ids: Optional[list[int]] = None  # None = kjør alle agenter
 
 
 class AgentResultResponse(BaseModel):

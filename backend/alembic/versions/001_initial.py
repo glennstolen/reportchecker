@@ -29,15 +29,11 @@ AGENT_TEMPLATES = [
                  "description": "Egen side (unummerert) med tittel, kandidatnummer, oppgave, dato, emne, institusjon"},
                 {"id": "innholdsfortegnelse", "label": "Innholdsfortegnelse", "weight": 15,
                  "description": "Egen side (unummerert)"},
-                {"id": "sammendrag_plassering", "label": "Sammendrag-plassering", "weight": 10,
-                 "description": (
-                     "Sammendrag er avsnittet/seksjonen som begynner med en linje hvor det står \"Sammendrag\" eller \"SAMMENDRAG\" uten mer på den linjen. "
-                     "Sammendraget skal komme etter innholdsfortegnelsen på en egen side, på siden etter kommer Introduksjon-seksjonen.")},
                 {"id": "kapittelnummerering", "label": "Kapittelnummerering", "weight": 15,
                  "description": "Sammendrag unummerert, Intro-Diskusjon nummerert (1-5), Referanser/Vedlegg unummerert"},
-                {"id": "formatering", "label": "Konsistent formatering", "weight": 15,
+                {"id": "formatering", "label": "Konsistent formatering", "weight": 20,
                  "description": "Lesbar font, passende størrelse, god lesbarhet"},
-                {"id": "lengde", "label": "Passende lengde", "weight": 15,
+                {"id": "lengde", "label": "Passende lengde", "weight": 20,
                  "description": "Ikke for kort eller for lang for oppgavens omfang"},
                 {"id": "rod_trad", "label": "Rød tråd", "weight": 20,
                  "description": "Logisk sammenheng gjennom hele rapporten"},

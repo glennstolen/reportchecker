@@ -43,7 +43,10 @@ async def create_evaluation(
             detail="Report has not been processed yet. Please wait for processing to complete.",
         )
 
-    agents = db.query(AgentConfiguration).order_by(AgentConfiguration.id).all()
+    query = db.query(AgentConfiguration)
+    if evaluation.agent_ids:
+        query = query.filter(AgentConfiguration.id.in_(evaluation.agent_ids))
+    agents = query.order_by(AgentConfiguration.id).all()
 
     service = EvaluationService(db)
     db_evaluation = await service.create_and_run_evaluation(report, agents)
@@ -67,7 +70,10 @@ async def create_evaluation_stream(
             detail="Report has not been processed yet.",
         )
 
-    agents = db.query(AgentConfiguration).order_by(AgentConfiguration.id).all()
+    query = db.query(AgentConfiguration)
+    if evaluation.agent_ids:
+        query = query.filter(AgentConfiguration.id.in_(evaluation.agent_ids))
+    agents = query.order_by(AgentConfiguration.id).all()
 
     async def generate_stream():
         import asyncio

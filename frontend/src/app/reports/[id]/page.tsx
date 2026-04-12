@@ -74,6 +74,7 @@ export default function ReportDetailPage() {
 
   const [report, setReport] = useState<Report | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedAgentIds, setSelectedAgentIds] = useState<Set<number>>(new Set());
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [evaluating, setEvaluating] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -115,6 +116,7 @@ export default function ReportDetailPage() {
       .then(([reportData, agentsData, evaluationsData]) => {
         setReport(reportData);
         setAgents(agentsData);
+        setSelectedAgentIds(new Set(agentsData.map((a: Agent) => a.id)));
         if (evaluationsData.length > 0) {
           setEvaluation(evaluationsData[0]);
         }
@@ -134,6 +136,7 @@ export default function ReportDetailPage() {
         credentials: "include",
         body: JSON.stringify({
           report_id: parseInt(reportId),
+          agent_ids: Array.from(selectedAgentIds),
         }),
       });
 
@@ -332,21 +335,28 @@ export default function ReportDetailPage() {
 
             <div className="space-y-1">
               {agents.map((agent) => (
-                <div key={agent.id} className="py-2 px-1 border-b last:border-0">
-                  <div className="flex items-center justify-between">
+                <label key={agent.id} className="flex items-center gap-2 py-2 px-1 border-b last:border-0 cursor-pointer hover:bg-gray-50 rounded">
+                  <input
+                    type="checkbox"
+                    checked={selectedAgentIds.has(agent.id)}
+                    onChange={() => setSelectedAgentIds((prev) => {
+                      const next = new Set(prev);
+                      next.has(agent.id) ? next.delete(agent.id) : next.add(agent.id);
+                      return next;
+                    })}
+                    className="w-4 h-4 accent-blue-600"
+                  />
+                  <div className="flex-1 flex items-center justify-between">
                     <p className="text-sm font-medium text-gray-900">{agent.name}</p>
                     <span className="text-xs text-gray-500 ml-2 shrink-0">{agent.max_score}%</span>
                   </div>
-                  {agent.description && agent.name === "Innholdssjekker" && (
-                    <p className="text-xs text-gray-500 mt-0.5">{agent.description}</p>
-                  )}
-                </div>
+                </label>
               ))}
             </div>
 
             <button
               onClick={runEvaluation}
-              disabled={evaluating || report.status.toUpperCase() !== "READY" || !report.anonymized_file_path}
+              disabled={evaluating || report.status.toUpperCase() !== "READY" || !report.anonymized_file_path || selectedAgentIds.size === 0}
               className="w-full mt-4 flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play className="w-4 h-4" />
