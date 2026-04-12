@@ -61,6 +61,7 @@ services:
       MINIO_SECRET_KEY: minioadmin123
       MINIO_BUCKET: reports
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
       REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
       HTTPX_SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt

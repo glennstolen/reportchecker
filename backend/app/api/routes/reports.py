@@ -11,6 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
+from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.core.storage import StorageClient
 from app.models.report import Report, ReportStatus
@@ -26,7 +27,7 @@ from app.services.report_service import ReportService
 from app.document_processing.pdf_anonymizer import anonymize_pdf, extract_report_info
 from app.document_processing.text_extractor import extract_text_from_pdf, extract_metadata_from_text
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.post("/upload", response_model=ReportResponse)

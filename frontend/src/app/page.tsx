@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { FileText, Settings, ArrowRight } from "lucide-react";
 
 interface Stats {
@@ -15,9 +16,9 @@ export default function Home() {
   useEffect(() => {
     // Fetch basic stats
     Promise.all([
-      fetch("http://localhost:8000/api/reports").then((r) => r.json()),
-      fetch("http://localhost:8000/api/agents").then((r) => r.json()),
-      fetch("http://localhost:8000/api/evaluations/count").then((r) => r.json()),
+      apiFetch("/api/reports").then((r) => r.json()),
+      apiFetch("/api/agents").then((r) => r.json()),
+      apiFetch("/api/evaluations/count").then((r) => r.json()),
     ])
       .then(([reports, agents, evalCount]) => {
         setStats({

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 import { ArrowLeft, UserX, Plus, Trash2, Download, Check, Loader2, AlertCircle } from "lucide-react";
 
 interface Author {
@@ -50,8 +51,8 @@ export default function AnonymizePage() {
   // Result state
   const [mappings, setMappings] = useState<AuthorMapping[]>([]);
 
-  const downloadFile = async (url: string, filename: string) => {
-    const response = await fetch(url);
+  const downloadFile = async (path: string, filename: string) => {
+    const response = await apiFetch(path);
     const blob = await response.blob();
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -65,7 +66,7 @@ export default function AnonymizePage() {
   useEffect(() => {
     const extractInfo = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/reports/${reportId}/extract-info`);
+        const response = await apiFetch(`/api/reports/${reportId}/extract-info`);
         if (!response.ok) {
           const err = await response.json();
           throw new Error(err.detail || "Kunne ikke hente rapport-info");
@@ -137,7 +138,7 @@ export default function AnonymizePage() {
       .filter((p) => !isNaN(p) && p >= 0);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/reports/${reportId}/anonymize`, {
+      const response = await apiFetch(`/api/reports/${reportId}/anonymize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -256,7 +257,7 @@ export default function AnonymizePage() {
           <div className="flex gap-4">
             <button
               onClick={() => downloadFile(
-                `http://localhost:8000/api/reports/${reportId}/mapping-file`,
+                `/api/reports/${reportId}/mapping-file`,
                 `kandidatmapping_${title.replace(/\s+/g, "_")}.txt`
               )}
               className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50"
@@ -266,7 +267,7 @@ export default function AnonymizePage() {
             </button>
             <button
               onClick={() => downloadFile(
-                `http://localhost:8000/api/reports/${reportId}/anonymized-pdf`,
+                `/api/reports/${reportId}/anonymized-pdf`,
                 `${title.replace(/\s+/g, "_")}_anonym.pdf`
               )}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"

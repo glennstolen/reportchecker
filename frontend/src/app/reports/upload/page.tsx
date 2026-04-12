@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Upload, FileText, X } from "lucide-react";
 
@@ -61,7 +62,7 @@ export default function UploadPage() {
     formData.append("file", file);
 
     try {
-      const response = await fetch("http://localhost:8000/api/reports/upload", {
+      const response = await apiFetch("/api/reports/upload", {
         method: "POST",
         body: formData,
       });

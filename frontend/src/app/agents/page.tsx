@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import {
   Settings,
   ChevronDown,
@@ -44,7 +45,7 @@ export default function AgentsPage() {
 
   const fetchAgents = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/agents");
+      const response = await apiFetch("/api/agents");
       const data = await response.json();
       setAgents(data);
     } catch (error) {
@@ -82,8 +83,8 @@ export default function AgentsPage() {
     if (!editDraft) return;
     setSaving(true);
     try {
-      const res = await fetch(
-        `http://localhost:8000/api/agents/${editDraft.id}`,
+      const res = await apiFetch(
+        `/api/agents/${editDraft.id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },

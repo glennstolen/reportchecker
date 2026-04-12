@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import LogoutButton from "@/components/LogoutButton";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -39,6 +40,9 @@ export default function RootLayout({
                       Agenter
                     </a>
                   </div>
+                </div>
+                <div className="flex items-center">
+                  <LogoutButton />
                 </div>
               </div>
             </div>

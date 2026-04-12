@@ -25,6 +25,9 @@ anthropic==0.42.0
 # PDF generation
 reportlab==4.2.5
 
+# Auth
+PyJWT==2.9.0
+
 # Utilities
 pydantic==2.10.4
 pydantic-settings==2.7.0

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FileText, Plus, Trash2, Download } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 interface CandidateMapping {
   name: string;
@@ -33,7 +34,7 @@ export default function ReportsPage() {
 
   const fetchReports = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/reports");
+      const response = await apiFetch("/api/reports");
       const data = await response.json();
       setReports(data);
     } catch (error) {
@@ -47,7 +48,7 @@ export default function ReportsPage() {
     if (!confirm("Er du sikker på at du vil slette denne rapporten?")) return;
 
     try {
-      await fetch(`http://localhost:8000/api/reports/${id}`, {
+      await apiFetch(`/api/reports/${id}`, {
         method: "DELETE",
       });
       setReports(reports.filter((r) => r.id !== id));
@@ -58,7 +59,7 @@ export default function ReportsPage() {
 
   const exportPdf = async (id: number, title: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/reports/${id}/export-pdf`);
+      const response = await apiFetch(`/api/reports/${id}/export-pdf`);
       if (!response.ok) {
         const error = await response.json();
         alert(error.detail || "Kunne ikke eksportere PDF");

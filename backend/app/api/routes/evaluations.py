@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.evaluation import Evaluation, AgentResult, EvaluationStatus
 from app.models.report import Report
@@ -16,7 +17,7 @@ from app.ai.evaluation_orchestrator import EvaluationOrchestrator
 from app.document_processing.text_extractor import extract_images_from_pdf
 from app.core.storage import StorageClient
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.get("/count")

@@ -19,6 +19,20 @@ class Settings(BaseSettings):
     # Anthropic
     anthropic_api_key: str = ""
 
+    # Auth
+    jwt_secret: str = "change-me-in-production"
+    app_url: str = "http://localhost:3000"
+
+    # SMTP (magic link e-post)
+    smtp_host: str = "smtp.sendgrid.net"
+    smtp_port: int = 587
+    smtp_user: str = ""        # Tom = ingen e-post, link printes i logg
+    smtp_password: str = ""
+    smtp_from: str = "noreply@example.com"
+
+    # CORS
+    allowed_origins: str = "http://localhost:3000"
+
     # App
     debug: bool = True
 

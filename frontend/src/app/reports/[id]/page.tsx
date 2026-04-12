@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { apiFetch, API_BASE } from "@/lib/api";
 import { Play, CheckCircle, XCircle, Clock, AlertCircle, ChevronDown, ChevronUp, Loader2, UserX, Download, List, Minus } from "lucide-react";
 
 interface Report {
@@ -81,8 +82,8 @@ export default function ReportDetailPage() {
   const [streamingAgents, setStreamingAgents] = useState<Map<number, StreamingAgent>>(new Map());
   const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set());
 
-  const downloadFile = async (url: string, filename: string) => {
-    const response = await fetch(url);
+  const downloadFile = async (path: string, filename: string) => {
+    const response = await apiFetch(path);
     const blob = await response.blob();
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -107,9 +108,9 @@ export default function ReportDetailPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`http://localhost:8000/api/reports/${reportId}`).then((r) => r.json()),
-      fetch("http://localhost:8000/api/agents").then((r) => r.json()),
-      fetch(`http://localhost:8000/api/evaluations/report/${reportId}`).then((r) => r.json()),
+      apiFetch(`/api/reports/${reportId}`).then((r) => r.json()),
+      apiFetch("/api/agents").then((r) => r.json()),
+      apiFetch(`/api/evaluations/report/${reportId}`).then((r) => r.json()),
     ])
       .then(([reportData, agentsData, evaluationsData]) => {
         setReport(reportData);
@@ -127,9 +128,10 @@ export default function ReportDetailPage() {
     setEvaluation(null);
 
     try {
-      const response = await fetch("http://localhost:8000/api/evaluations/stream", {
+      const response = await fetch(`${API_BASE}/api/evaluations/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           report_id: parseInt(reportId),
         }),
@@ -223,8 +225,8 @@ export default function ReportDetailPage() {
                 case "complete":
                   // Fetch the complete evaluation for final display
                   if (evaluationId) {
-                    const evalResponse = await fetch(
-                      `http://localhost:8000/api/evaluations/${evaluationId}`
+                    const evalResponse = await apiFetch(
+                      `/api/evaluations/${evaluationId}`
                     );
                     const evalData = await evalResponse.json();
                     setEvaluation(evalData);
@@ -281,7 +283,7 @@ export default function ReportDetailPage() {
               <>
                 <button
                   onClick={() => downloadFile(
-                    `http://localhost:8000/api/reports/${reportId}/anonymized-pdf`,
+                    `/api/reports/${reportId}/anonymized-pdf`,
                     `${report.title.replace(/\s+/g, "_")}_anonym.pdf`
                   )}
                   className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-gray-50 text-sm"
@@ -291,7 +293,7 @@ export default function ReportDetailPage() {
                 </button>
                 <button
                   onClick={() => downloadFile(
-                    `http://localhost:8000/api/reports/${reportId}/mapping-file`,
+                    `/api/reports/${reportId}/mapping-file`,
                     `kandidatmapping_${report.title.replace(/\s+/g, "_")}.txt`
                   )}
                   className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-gray-50 text-sm"
