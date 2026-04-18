@@ -28,6 +28,7 @@ app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 app.include_router(evaluations.router, prefix="/api/evaluations", tags=["evaluations"])
 
 
+
 @app.on_event("startup")
 async def seed_admin_user():
     """Create admin user from ADMIN_EMAIL env var if not already present."""

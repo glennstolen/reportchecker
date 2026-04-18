@@ -19,3 +19,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# Import models so Alembic autogenerate can detect them
+from app.models import candidate_registry  # noqa: F401, E402

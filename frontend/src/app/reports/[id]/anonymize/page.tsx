@@ -5,13 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { ArrowLeft, UserX, Plus, Trash2, Download, Check, Loader2, AlertCircle } from "lucide-react";
 
-interface Author {
+interface MappingRow {
+  candidate_number: string;
   name: string;
   initials: string;
 }
 
 interface ExtractedInfo {
-  authors: Author[];
+  authors: Array<{ name: string; initials: string; candidate_number: string }>;
   medforfatterbidrag: Record<string, string[]>;
   ki_brukt: boolean;
   total_pages: number;
@@ -21,10 +22,14 @@ interface ExtractedInfo {
   dato: string | null;
 }
 
-interface AuthorMapping {
+interface AuthorMappingResult {
   name: string;
   initials: string;
   candidate_number: string;
+}
+
+function generateCandidateNumber(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
 export default function AnonymizePage() {
@@ -33,23 +38,20 @@ export default function AnonymizePage() {
   const reportId = params.id as string;
 
   const [loading, setLoading] = useState(true);
-  const [extracting, setExtracting] = useState(true);
   const [anonymizing, setAnonymizing] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Extracted/editable data
   const [title, setTitle] = useState("");
   const [dato, setDato] = useState("");
   const [oppgave, setOppgave] = useState("");
-  const [authors, setAuthors] = useState<Author[]>([]);
+  const [mappings, setMappings] = useState<MappingRow[]>([]);
   const [medforfatterbidrag, setMedforfatterbidrag] = useState<Record<string, string[]>>({});
   const [kiBrukt, setKiBrukt] = useState(false);
   const [totalPages, setTotalPages] = useState(0);
   const [pagesToRemove, setPagesToRemove] = useState<string>("");
 
-  // Result state
-  const [mappings, setMappings] = useState<AuthorMapping[]>([]);
+  const [resultMappings, setResultMappings] = useState<AuthorMappingResult[]>([]);
 
   const downloadFile = async (path: string, filename: string) => {
     const response = await apiFetch(path);
@@ -76,7 +78,15 @@ export default function AnonymizePage() {
         setTitle(data.title);
         setDato(data.dato || "");
         setOppgave(data.oppgave || "");
-        setAuthors(data.authors.length > 0 ? data.authors : [{ name: "", initials: "" }]);
+        setMappings(
+          data.authors.length > 0
+            ? data.authors.map((a) => ({
+                candidate_number: a.candidate_number,
+                name: a.name,
+                initials: a.initials,
+              }))
+            : [{ candidate_number: generateCandidateNumber(), name: "", initials: "" }]
+        );
         setMedforfatterbidrag(data.medforfatterbidrag);
         setKiBrukt(data.ki_brukt);
         setTotalPages(data.total_pages);
@@ -84,7 +94,6 @@ export default function AnonymizePage() {
       } catch (err) {
         setError(err instanceof Error ? err.message : "Noe gikk galt");
       } finally {
-        setExtracting(false);
         setLoading(false);
       }
     };
@@ -92,28 +101,37 @@ export default function AnonymizePage() {
     extractInfo();
   }, [reportId]);
 
-  const addAuthor = () => {
-    setAuthors([...authors, { name: "", initials: "" }]);
+  const addMapping = () => {
+    setMappings([...mappings, { candidate_number: generateCandidateNumber(), name: "", initials: "" }]);
   };
 
-  const removeAuthor = (index: number) => {
-    setAuthors(authors.filter((_, i) => i !== index));
+  const removeMapping = (index: number) => {
+    setMappings(mappings.filter((_, i) => i !== index));
   };
 
-  const updateAuthor = (index: number, field: keyof Author, value: string) => {
-    const updated = [...authors];
+  const updateMapping = (index: number, field: "name" | "initials", value: string) => {
+    const updated = [...mappings];
     updated[index][field] = value;
-    setAuthors(updated);
+    setMappings(updated);
   };
 
-  const updateMedforfatterbidrag = (section: string, value: string) => {
+  const updateMedforfatterbidragInitials = (section: string, value: string) => {
     const initials = value.split(",").map((s) => s.trim()).filter(Boolean);
     setMedforfatterbidrag({ ...medforfatterbidrag, [section]: initials });
   };
 
+  const renameMedforfatterbidragSection = (oldSection: string, newSection: string) => {
+    const entries = Object.entries(medforfatterbidrag);
+    const updated: Record<string, string[]> = {};
+    for (const [k, v] of entries) {
+      updated[k === oldSection ? newSection : k] = v;
+    }
+    setMedforfatterbidrag(updated);
+  };
+
   const addMedforfatterbidragSection = () => {
-    const newSection = `Ny seksjon ${Object.keys(medforfatterbidrag).length + 1}`;
-    setMedforfatterbidrag({ ...medforfatterbidrag, [newSection]: [] });
+    const key = `__new_${Date.now()}`;
+    setMedforfatterbidrag({ ...medforfatterbidrag, [key]: [] });
   };
 
   const removeMedforfatterbidragSection = (section: string) => {
@@ -123,15 +141,14 @@ export default function AnonymizePage() {
   };
 
   const handleAnonymize = async () => {
-    if (authors.some((a) => !a.name || !a.initials)) {
-      alert("Fyll inn navn og initialer for alle forfattere");
+    if (mappings.some((m) => !m.name)) {
+      alert("Fyll inn navn for alle rader");
       return;
     }
 
     setAnonymizing(true);
     setError(null);
 
-    // Convert pages to 0-indexed array
     const pages = pagesToRemove
       .split(",")
       .map((p) => parseInt(p.trim()) - 1)
@@ -142,7 +159,7 @@ export default function AnonymizePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          authors,
+          mappings,
           pages_to_remove: pages,
           medforfatterbidrag: Object.keys(medforfatterbidrag).length > 0 ? medforfatterbidrag : null,
           ki_brukt: kiBrukt,
@@ -158,7 +175,7 @@ export default function AnonymizePage() {
       }
 
       const result = await response.json();
-      setMappings(result.mappings);
+      setResultMappings(result.mappings);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Noe gikk galt");
@@ -167,7 +184,7 @@ export default function AnonymizePage() {
     }
   };
 
-  if (loading || extracting) {
+  if (loading) {
     return (
       <div className="px-4 max-w-3xl mx-auto py-12">
         <div className="flex items-center justify-center gap-3">
@@ -186,10 +203,7 @@ export default function AnonymizePage() {
             <AlertCircle className="w-6 h-6" />
             <span>{error}</span>
           </div>
-          <button
-            onClick={() => router.back()}
-            className="mt-4 text-blue-600 hover:underline"
-          >
+          <button onClick={() => router.back()} className="mt-4 text-blue-600 hover:underline">
             Tilbake
           </button>
         </div>
@@ -199,12 +213,8 @@ export default function AnonymizePage() {
 
   return (
     <div className="px-4 max-w-3xl mx-auto">
-      {/* Header */}
       <div className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => router.back()}
-          className="p-2 hover:bg-gray-100 rounded-md"
-        >
+        <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-md">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
@@ -214,7 +224,6 @@ export default function AnonymizePage() {
       </div>
 
       {done ? (
-        /* Success view */
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
@@ -223,12 +232,11 @@ export default function AnonymizePage() {
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Rapport anonymisert!</h2>
               <p className="text-sm text-gray-600">
-                Forsiden og vedleggene er erstattet med anonymisert informasjon.
+                Navn og initialer er erstattet med kandidatnumre gjennom hele rapporten.
               </p>
             </div>
           </div>
 
-          {/* Mapping table */}
           <div className="mb-6">
             <h3 className="font-medium text-gray-900 mb-3">Kandidatmapping</h3>
             <table className="w-full border rounded-lg overflow-hidden">
@@ -240,7 +248,7 @@ export default function AnonymizePage() {
                 </tr>
               </thead>
               <tbody>
-                {mappings.map((m, i) => (
+                {resultMappings.map((m, i) => (
                   <tr key={i} className="border-t">
                     <td className="px-4 py-2 text-sm">{m.name}</td>
                     <td className="px-4 py-2 text-sm">{m.initials}</td>
@@ -253,7 +261,14 @@ export default function AnonymizePage() {
             </table>
           </div>
 
-          {/* Download buttons */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+            <p className="text-sm text-amber-800">
+              <strong>Sjekk PDF-en før bruk:</strong> Automatisk ekstraksjon kan misse navn som ikke
+              følger standardformat. Last ned PDF-en og søk etter kjente navn for å verifisere at
+              alle er erstattet. Hvis noe mangler, last opp rapporten på nytt og legg til navnene manuelt.
+            </p>
+          </div>
+
           <div className="flex gap-4">
             <button
               onClick={() => downloadFile(
@@ -277,33 +292,44 @@ export default function AnonymizePage() {
             </button>
           </div>
 
-          <div className="mt-6 pt-6 border-t">
+          <div className="mt-6 pt-6 border-t flex items-center justify-between">
             <button
               onClick={() => router.push(`/reports/${reportId}`)}
               className="text-blue-600 hover:underline"
             >
               Gå til rapport for evaluering
             </button>
+            <button
+              onClick={() => {
+                setMappings(resultMappings.map(m => ({
+                  candidate_number: m.candidate_number,
+                  name: m.name,
+                  initials: m.initials,
+                })));
+                setDone(false);
+              }}
+              className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50 text-sm"
+            >
+              <UserX className="w-4 h-4" />
+              Re-anonymiser
+            </button>
           </div>
         </div>
       ) : (
-        /* Confirmation form */
         <div className="space-y-6">
-          {/* Info banner */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-800">
-              Informasjonen nedenfor er automatisk ekstrahert fra rapporten.
-              Bekreft at alt er korrekt, eller gjør endringer før du anonymiserer.
+              Navn og initialer er automatisk ekstrahert som forslag — sjekk og korriger om nødvendig.
+              Hvert navn og initialer søkes opp og erstattes med kandidatnummeret gjennom hele rapporten.
+              Kandidatnumre er faste og endres ikke ved ny opplasting av samme rapport.
             </p>
           </div>
 
-          {/* Title and Date section */}
+          {/* Title and Date */}
           <div className="bg-white rounded-lg shadow-sm border p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Tittel og dato
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                (ekstrahert fra forside)
-              </span>
+              <span className="text-sm font-normal text-gray-500 ml-2">(ekstrahert fra forside)</span>
             </h2>
             <div className="space-y-4">
               <div>
@@ -339,76 +365,92 @@ export default function AnonymizePage() {
             </div>
           </div>
 
-          {/* Authors section */}
+          {/* Mapping table */}
           <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Forfattere
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                (ekstrahert fra forside)
-              </span>
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">
+              Navn og kandidatnumre
             </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Navn og initialer søkes opp og erstattes gjennom hele rapporten. Kandidatnummer er fast.
+            </p>
 
-            <div className="space-y-3">
-              {authors.map((author, index) => (
-                <div key={index} className="flex gap-3 items-start">
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      placeholder="Fullt navn"
-                      value={author.name}
-                      onChange={(e) => updateAuthor(index, "name", e.target.value)}
-                      className="w-full px-3 py-2 border rounded-md"
-                    />
-                  </div>
-                  <div className="w-32">
-                    <input
-                      type="text"
-                      placeholder="Initialer"
-                      value={author.initials}
-                      onChange={(e) => updateAuthor(index, "initials", e.target.value)}
-                      className="w-full px-3 py-2 border rounded-md"
-                    />
-                  </div>
-                  {authors.length > 1 && (
-                    <button
-                      onClick={() => removeAuthor(index)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-md"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 pr-3 text-sm font-medium text-gray-600 w-28">Kandidatnr</th>
+                    <th className="text-left py-2 pr-3 text-sm font-medium text-gray-600">Navn (søkes etter)</th>
+                    <th className="text-left py-2 pr-3 text-sm font-medium text-gray-600 w-32">Initialer (søkes etter)</th>
+                    <th className="w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {mappings.map((row, index) => (
+                    <tr key={index}>
+                      <td className="py-2 pr-3">
+                        <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-700">
+                          {row.candidate_number}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-3">
+                        <input
+                          type="text"
+                          value={row.name}
+                          onChange={(e) => updateMapping(index, "name", e.target.value)}
+                          className="w-full px-3 py-1.5 border rounded-md text-sm"
+                          placeholder="Fullt navn, alternativt navn, ..."
+                        />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <input
+                          type="text"
+                          value={row.initials}
+                          onChange={(e) => updateMapping(index, "initials", e.target.value)}
+                          className="w-full px-3 py-1.5 border rounded-md text-sm"
+                          placeholder="F.N"
+                        />
+                      </td>
+                      <td className="py-2">
+                        <button
+                          onClick={() => removeMapping(index)}
+                          className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
             <button
-              onClick={addAuthor}
+              onClick={addMapping}
               className="mt-3 flex items-center gap-2 text-sm text-blue-600 hover:underline"
             >
               <Plus className="w-4 h-4" />
-              Legg til forfatter
+              Legg til person
             </button>
           </div>
 
-          {/* Medforfatterbidrag section */}
+          {/* Medforfatterbidrag */}
           <div className="bg-white rounded-lg shadow-sm border p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Medforfatterbidrag
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                (ekstrahert fra vedlegg)
-              </span>
+              <span className="text-sm font-normal text-gray-500 ml-2">(ekstrahert fra vedlegg)</span>
             </h2>
 
             {Object.keys(medforfatterbidrag).length > 0 ? (
               <div className="space-y-3">
-                {Object.entries(medforfatterbidrag).map(([section, initials]) => (
-                  <div key={section} className="flex gap-3 items-start">
+                {Object.entries(medforfatterbidrag).map(([section, initials], idx) => (
+                  <div key={idx} className="flex gap-3 items-start">
                     <div className="flex-1">
                       <input
                         type="text"
                         value={section}
-                        readOnly
-                        className="w-full px-3 py-2 border rounded-md bg-gray-50"
+                        onChange={(e) => renameMedforfatterbidragSection(section, e.target.value)}
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        placeholder="Seksjonsname"
                       />
                     </div>
                     <div className="w-40">
@@ -416,13 +458,13 @@ export default function AnonymizePage() {
                         type="text"
                         placeholder="Initialer"
                         value={initials.join(", ")}
-                        onChange={(e) => updateMedforfatterbidrag(section, e.target.value)}
-                        className="w-full px-3 py-2 border rounded-md"
+                        onChange={(e) => updateMedforfatterbidragInitials(section, e.target.value)}
+                        className="w-full px-3 py-2 border rounded-md text-sm"
                       />
                     </div>
                     <button
                       onClick={() => removeMedforfatterbidragSection(section)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-md"
+                      className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -446,9 +488,10 @@ export default function AnonymizePage() {
 
           {/* Pages to remove */}
           <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Sider å fjerne</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Sider å fjerne</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Sidenummer (kommaseparert) som skal fjernes. Rapporten har {totalPages} sider.
+              Sidenummer (kommaseparert) som skal fjernes fra den anonymiserte rapporten.
+              Rapporten har {totalPages} sider.
             </p>
             <input
               type="text"
@@ -473,14 +516,12 @@ export default function AnonymizePage() {
             </label>
           </div>
 
-          {/* Error message */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <p className="text-red-700">{error}</p>
             </div>
           )}
 
-          {/* Submit button */}
           <div className="flex gap-4">
             <button
               onClick={() => router.back()}

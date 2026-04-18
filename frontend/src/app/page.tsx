@@ -57,7 +57,7 @@ export default function Home() {
                   Last opp rapport
                 </h3>
                 <p className="text-sm text-gray-600">
-                  Last opp en PDF eller Word-fil for evaluering
+                  Last opp en PDF for evaluering
                 </p>
               </div>
             </div>

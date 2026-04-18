@@ -83,68 +83,77 @@ def _extract_authors_from_cover(text: str) -> list[dict]:
 def _extract_medforfatterbidrag(text: str) -> dict[str, list[str]]:
     """
     Extract medforfatterbidrag section from text.
-    Handles two formats:
+    Handles three formats:
+
     Format 1 (colon-separated, one per line):
         Sammendrag: I.I.F
         1 Introduksjon: T.B, I.I.F
-    Format 2 (comma-separated, semicolon between entries):
+
+    Format 2 (section per entry, semicolon-separated):
         Sammendrag, F.I; Introduksjon, I.A; Materiale og metode, F.I
+
+    Format 3 (all sections listed, then semicolon, then initials):
+        Sammendrag, Introduksjon, Materialer og metoder, Resultater,; A.E. og A.H.
     """
     medforfatterbidrag = {}
 
-    # Find the Medforfatterbidrag section
     match = re.search(r'[Mm]edforfatterbidrag\s*\n(.*?)(?:\n\s*\n|Alle forfattere|Originalitet|$)',
                       text, re.DOTALL)
     if not match:
         return medforfatterbidrag
 
     section_text = match.group(1).strip()
+    full_text = ' '.join(section_text.split('\n'))
 
-    # Pattern for initials like T.B, I.I.F, A.B.C, F.I
+    # Pattern for initials like T.B, I.I.F, A.B.C, A.E.
     initials_pattern = r'[A-ZÆØÅ](?:\.[A-ZÆØÅ])+\.?'
 
-    # Check if it's Format 2 (semicolon-separated entries with comma before initials)
-    if ';' in section_text and re.search(r',\s*[A-ZÆØÅ]\.', section_text):
-        # Format 2: "Sammendrag, F.I; Introduksjon, I.A; ..."
-        # Join lines and split by semicolon
-        full_text = ' '.join(section_text.split('\n'))
-        entries = full_text.split(';')
+    # Format 3: sections listed before a semicolon, initials after
+    # e.g. "Sammendrag, Introduksjon, Vedlegg,; A.E. og A.H."
+    format3_match = re.match(
+        r'^((?:[^;]+?,\s*)+);?\s*(' + initials_pattern + r'(?:\s+og\s+' + initials_pattern + r')*)',
+        full_text
+    )
+    if format3_match and ';' in full_text:
+        sections_part = format3_match.group(1)
+        initials_part = format3_match.group(2)
+        sections = [s.strip().rstrip(',') for s in sections_part.split(',') if s.strip().rstrip(',')]
+        initials = re.findall(initials_pattern, initials_part)
+        if sections and initials:
+            for section in sections:
+                if section:
+                    medforfatterbidrag[section] = initials
+            return medforfatterbidrag
 
-        for entry in entries:
+    # Format 2: "Sammendrag, F.I; Introduksjon, I.A; ..."
+    if ';' in full_text and re.search(r',\s*[A-ZÆØÅ]\.', full_text):
+        for entry in full_text.split(';'):
             entry = entry.strip()
             if not entry:
                 continue
-
-            # Find the last comma before initials
-            # Pattern: "Section name, X.Y" or "Section name, X.Y.Z"
-            match_entry = re.match(r'(.+?),\s*(' + initials_pattern + r')', entry)
-            if match_entry:
-                section_name = match_entry.group(1).strip()
-                initial = match_entry.group(2).strip()
+            entry_match = re.match(r'(.+?),\s*(' + initials_pattern + r')', entry)
+            if entry_match:
+                section_name = entry_match.group(1).strip()
+                initial = entry_match.group(2).strip()
                 if section_name and initial:
                     if section_name not in medforfatterbidrag:
                         medforfatterbidrag[section_name] = []
                     medforfatterbidrag[section_name].append(initial)
-    else:
-        # Format 1: colon-separated, one per line
-        for line in section_text.split('\n'):
-            line = line.strip()
-            if not line or ':' not in line:
-                continue
+        if medforfatterbidrag:
+            return medforfatterbidrag
 
-            # Split by colon to get section name and contributors
-            parts = line.split(':', 1)
-            if len(parts) != 2:
-                continue
-
-            section_name = parts[0].strip()
-            contributors_text = parts[1].strip()
-
-            # Find all initials in the contributors text
-            initials = re.findall(initials_pattern, contributors_text)
-
-            if section_name and initials:
-                medforfatterbidrag[section_name] = initials
+    # Format 1: colon-separated, one per line
+    for line in section_text.split('\n'):
+        line = line.strip()
+        if not line or ':' not in line:
+            continue
+        parts = line.split(':', 1)
+        if len(parts) != 2:
+            continue
+        section_name = parts[0].strip()
+        initials = re.findall(initials_pattern, parts[1])
+        if section_name and initials:
+            medforfatterbidrag[section_name] = initials
 
     return medforfatterbidrag
 
@@ -338,10 +347,8 @@ def extract_report_info(content: bytes) -> ExtractedReportInfo:
         medforfatterbidrag = _extract_medforfatterbidrag(appendix_text)
         ki_brukt = _extract_ki_status(appendix_text)
 
-    # Suggested pages to remove (1-indexed for user display)
-    suggested_pages = [1]  # Always suggest removing cover page
-    if appendix_page is not None:
-        suggested_pages.append(appendix_page + 1)  # Convert to 1-indexed
+    # Only suggest removing the cover page — appendix stays since full text is anonymized
+    suggested_pages = [1]
 
     doc.close()
 
@@ -408,6 +415,45 @@ def generate_mapping_file_content(
         lines.append(f"{mapping.name:<30} {mapping.initials:<12} {mapping.candidate_number:<15}")
 
     return "\n".join(lines)
+
+
+def replace_text_in_pdf(content: bytes, replacements: list[tuple[str, str]]) -> bytes:
+    """
+    Search-replace text throughout all pages of a PDF using redaction annotations.
+    Replacements must be sorted longest-first by the caller to avoid partial replacements.
+    Note: text split across line breaks will not be found. Scanned images are not affected.
+    """
+    doc = fitz.open(stream=content, filetype="pdf")
+    for page in doc:
+        for search_term, replacement in replacements:
+            if not search_term.strip():
+                continue
+            hits = page.search_for(search_term, quads=True)
+            for quad in hits:
+                page.add_redact_annot(quad, text=replacement, fontsize=10)
+        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
+    output = io.BytesIO()
+    # garbage=4 + deflate ensures original content streams are not preserved in the file
+    doc.save(output, garbage=4, deflate=True)
+    doc.close()
+    return output.getvalue()
+
+
+def build_replacement_pairs(mappings: list[AuthorMapping]) -> list[tuple[str, str]]:
+    """Build sorted (search_term, replacement) pairs from author mappings.
+    Sorted longest-first to prevent partial replacements (e.g. first name before full name)."""
+    pairs = []
+    for m in mappings:
+        for name in [n.strip() for n in m.name.split(",") if n.strip()]:
+            pairs.append((name, f"Kandidat {m.candidate_number}"))
+        if m.initials:
+            # Initials are redacted (blanked) rather than replaced with a number — the
+            # candidate number doesn't fit in the small bounding box of 2-3 initials chars.
+            pairs.append((m.initials, ""))
+            if not m.initials.endswith("."):
+                pairs.append((m.initials + ".", ""))
+    pairs.sort(key=lambda x: len(x[0]), reverse=True)
+    return pairs
 
 
 def remove_pages_from_pdf(content: bytes, pages_to_remove: list[int]) -> bytes:
@@ -627,11 +673,11 @@ def anonymize_pdf(
     title: str,
     oppgave: str,
     dato: str,
-    authors: list[dict],
+    mappings: list[AuthorMapping],
     medforfatterbidrag: dict[str, list[str]] | None,
     ki_brukt: bool,
     pages_to_remove: list[int],
-) -> tuple[bytes, bytes, list[AuthorMapping]]:
+) -> tuple[bytes, bytes]:
     """
     Anonymize a PDF report.
 
@@ -640,22 +686,24 @@ def anonymize_pdf(
         title: Report title
         oppgave: Assignment name
         dato: Submission date
-        authors: List of {"name": "...", "initials": "..."} for each author
+        mappings: Pre-built author mappings with candidate numbers
         medforfatterbidrag: Dict of section -> list of initials
         ki_brukt: Whether AI was used
         pages_to_remove: Page indices to remove (0-indexed)
 
     Returns:
-        Tuple of (anonymized_pdf, mapping_file_content, mappings)
+        Tuple of (anonymized_pdf_bytes, mapping_file_bytes)
     """
-    # Generate candidate mappings
-    mappings = create_author_mappings(authors)
     kandidater = [m.candidate_number for m in mappings]
 
-    # Remove specified pages from original
-    main_pdf = remove_pages_from_pdf(content, pages_to_remove)
+    # Search-replace names and initials throughout the entire document first
+    replacement_pairs = build_replacement_pairs(mappings)
+    redacted = replace_text_in_pdf(content, replacement_pairs)
 
-    # Create anonymized cover page
+    # Remove specified pages
+    main_pdf = remove_pages_from_pdf(redacted, pages_to_remove)
+
+    # Create anonymized cover page with candidate numbers
     cover_pdf = create_cover_page(
         title=title,
         kandidater=kandidater,
@@ -672,4 +720,4 @@ def anonymize_pdf(
     # Generate mapping file
     mapping_content = generate_mapping_file_content(mappings, title)
 
-    return anonymized_pdf, mapping_content.encode('utf-8'), mappings
+    return anonymized_pdf, mapping_content.encode('utf-8')

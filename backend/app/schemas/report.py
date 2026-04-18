@@ -7,9 +7,27 @@ class ReportCreate(BaseModel):
     title: str
 
 
-class AuthorInput(BaseModel):
+class MappingRow(BaseModel):
+    candidate_number: str
     name: str
     initials: str
+
+
+class ExtractInfoAuthor(BaseModel):
+    name: str
+    initials: str
+    candidate_number: str
+
+
+class ExtractInfoResponse(BaseModel):
+    authors: list[ExtractInfoAuthor]
+    medforfatterbidrag: dict[str, list[str]]
+    ki_brukt: bool
+    total_pages: int
+    suggested_pages_to_remove: list[int]
+    title: str
+    oppgave: Optional[str]
+    dato: Optional[str]
 
 
 class AuthorMappingResponse(BaseModel):
@@ -19,13 +37,13 @@ class AuthorMappingResponse(BaseModel):
 
 
 class AnonymizeRequest(BaseModel):
-    authors: list[AuthorInput]
+    mappings: list[MappingRow]
     pages_to_remove: list[int]  # 0-indexed page numbers
-    medforfatterbidrag: Optional[dict[str, list[str]]] = None  # section -> list of initials
+    medforfatterbidrag: Optional[dict[str, list[str]]] = None
     ki_brukt: bool = False
-    title: Optional[str] = None  # Report title for cover page
-    dato: Optional[str] = None  # Date for cover page (DD.MM.YYYY)
-    oppgave: Optional[str] = None  # Assignment name for cover page
+    title: Optional[str] = None
+    dato: Optional[str] = None
+    oppgave: Optional[str] = None
 
 
 class AnonymizeResponse(BaseModel):

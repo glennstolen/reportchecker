@@ -34,14 +34,8 @@ export default function UploadPage() {
   };
 
   const handleFile = (selectedFile: File) => {
-    const allowedTypes = [
-      "application/pdf",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/msword",
-    ];
-
-    if (!allowedTypes.includes(selectedFile.type)) {
-      setError("Kun PDF og Word-filer er tillatt");
+    if (selectedFile.type !== "application/pdf") {
+      setError("Kun PDF-filer er tillatt");
       return;
     }
 
@@ -102,7 +96,7 @@ export default function UploadPage() {
             ref={fileInputRef}
             type="file"
             className="hidden"
-            accept=".pdf,.doc,.docx"
+            accept=".pdf"
             onChange={(e) => e.target.files && handleFile(e.target.files[0])}
           />
 
@@ -131,7 +125,7 @@ export default function UploadPage() {
               <p className="text-gray-600 mb-2">
                 Dra og slipp en fil her, eller klikk for å velge
               </p>
-              <p className="text-sm text-gray-500">PDF eller Word-dokument</p>
+              <p className="text-sm text-gray-500">PDF-fil</p>
             </>
           )}
         </div>

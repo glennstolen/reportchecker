@@ -22,9 +22,16 @@ from app.schemas.report import (
     AnonymizeRequest,
     AnonymizeResponse,
     AuthorMappingResponse,
+    ExtractInfoResponse,
+    ExtractInfoAuthor,
 )
 from app.services.report_service import ReportService
-from app.document_processing.pdf_anonymizer import anonymize_pdf, extract_report_info
+from app.services.candidate_service import get_or_create_candidate_number
+from app.document_processing.pdf_anonymizer import (
+    anonymize_pdf,
+    extract_report_info,
+    AuthorMapping,
+)
 from app.document_processing.text_extractor import extract_text_from_pdf, extract_metadata_from_text
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -36,18 +43,13 @@ async def upload_report(
     title: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Upload a new report (PDF or Word document)."""
+    """Upload a new report (PDF only)."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
-    # Validate file type
-    allowed_extensions = {".pdf", ".docx", ".doc"}
     file_ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-    if file_ext not in allowed_extensions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File type not allowed. Allowed: {', '.join(allowed_extensions)}",
-        )
+    if file_ext != ".pdf":
+        raise HTTPException(status_code=400, detail="Kun PDF-filer er tillatt")
 
     # Use filename as title if not provided
     if not title:
@@ -196,35 +198,44 @@ def export_report_pdf(report_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/{report_id}/extract-info")
+@router.get("/{report_id}/extract-info", response_model=ExtractInfoResponse)
 def extract_info(report_id: int, db: Session = Depends(get_db)):
     """Extract author and contribution information from a report for anonymization."""
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    # Download the PDF
     storage = StorageClient()
     try:
         content = storage.download_file(report.file_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not download file: {e}")
 
-    # Extract information
     try:
         info = extract_report_info(content)
-        return {
-            "authors": info.authors,
-            "medforfatterbidrag": info.medforfatterbidrag,
-            "ki_brukt": info.ki_brukt,
-            "total_pages": info.total_pages,
-            "suggested_pages_to_remove": info.suggested_pages_to_remove,
-            "title": info.extracted_title or report.title,  # Prefer extracted title
-            "oppgave": info.extracted_oppgave or report.oppgave,  # Prefer extracted oppgave
-            "dato": info.extracted_dato or (report.innleveringsdato.strftime("%d.%m.%Y") if report.innleveringsdato else None),
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not extract info: {e}")
+
+    # Assign persistent candidate numbers — same name always gets same number
+    authors = [
+        ExtractInfoAuthor(
+            name=a["name"],
+            initials=a["initials"],
+            candidate_number=get_or_create_candidate_number(db, a["name"]),
+        )
+        for a in info.authors
+    ]
+
+    return ExtractInfoResponse(
+        authors=authors,
+        medforfatterbidrag=info.medforfatterbidrag,
+        ki_brukt=info.ki_brukt,
+        total_pages=info.total_pages,
+        suggested_pages_to_remove=info.suggested_pages_to_remove,
+        title=info.extracted_title or report.title,
+        oppgave=info.extracted_oppgave or report.oppgave,
+        dato=info.extracted_dato or (report.innleveringsdato.strftime("%d.%m.%Y") if report.innleveringsdato else None),
+    )
 
 
 @router.post("/{report_id}/anonymize", response_model=AnonymizeResponse)
@@ -245,22 +256,22 @@ def anonymize_report(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not download original file: {e}")
 
-    # Prepare authors list
-    authors = [{"name": a.name, "initials": a.initials} for a in request.authors]
-
-    # Use title, dato, and oppgave from request if provided, otherwise fall back to report data
     title = request.title or report.title
     dato = request.dato or (report.innleveringsdato.strftime("%d.%m.%Y") if report.innleveringsdato else "")
     oppgave = request.oppgave or report.oppgave or ""
 
-    # Anonymize the PDF
+    mappings = [
+        AuthorMapping(name=m.name, initials=m.initials, candidate_number=m.candidate_number)
+        for m in request.mappings
+    ]
+
     try:
-        anonymized_content, mapping_content, mappings = anonymize_pdf(
+        anonymized_content, mapping_content = anonymize_pdf(
             content=original_content,
             title=title,
             oppgave=oppgave,
             dato=dato,
-            authors=authors,
+            mappings=mappings,
             medforfatterbidrag=request.medforfatterbidrag,
             ki_brukt=request.ki_brukt,
             pages_to_remove=request.pages_to_remove,
