@@ -1,10 +1,11 @@
 # ReportChecker
 
-AI-assistert vurdering av labrapporter i bioteknologi og biokjemi.
+AI-assistert vurdering og anonymisering av labrapporter i bioteknologi og biokjemi.
 
 ## Funksjoner
 
-- Last opp PDF- eller Word-rapporter
+- Last opp PDF-rapporter for evaluering
+- **Anonymisering:** søk-og-erstatt navn/initialer gjennom hele rapporten, persistent kandidatnummer per student på tvers av rapporter
 - 7 forhåndskonfigurerte sjekkere som evaluerer ulike aspekter:
   - **Formalitetssjekker** – tittelside, innholdsfortegnelse, kapittelstruktur (3%)
   - **Kildesjekker** – kildebruk, referansestil, in-text-referanser (3%)
@@ -15,8 +16,8 @@ AI-assistert vurdering av labrapporter i bioteknologi og biokjemi.
   - **Helhetsvurdering** – rød tråd, lesbarhet, profesjonelt inntrykk (3%)
 - Parallell evaluering med live framdriftsvising
 - Score per kriterie med detaljert tilbakemelding
-- Anonymisering av rapporter (fjern navn, behold kandidatnummer)
 - PDF-eksport av evalueringsresultater
+- Magic link-innlogging (ingen passord)
 
 ## Teknisk stack
 
@@ -29,66 +30,43 @@ AI-assistert vurdering av labrapporter i bioteknologi og biokjemi.
 
 ---
 
-## Installasjon for sluttbrukere (Windows)
-
-### Forutsetninger
-
-- [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/) installert og startet
-- En [Anthropic API-nøkkel](https://console.anthropic.com/)
-
-### Steg
-
-1. Last ned `ReportChecker-Setup.exe` fra [siste release](../../releases/latest)
-2. Kjør installasjonsfilen og følg veiviseren
-3. Oppgi Anthropic API-nøkkel når du blir bedt om det
-4. Klikk **"Start ReportChecker"** på skrivebordet
-
-**NB:** Første oppstart tar noen minutter mens Docker laster ned nødvendige komponenter (~1 GB).
-
-Appen åpnes automatisk i nettleseren på `http://localhost:3000`.
-
----
-
 ## Utviklingsoppsett
 
 ### Forutsetninger
 
 - Docker og Docker Compose
-- Python 3.12+ med venv
 - Node.js 20+
 - En Anthropic API-nøkkel
 
 ### 1. Konfigurer miljøvariabler
 
 ```bash
-cp .env.example .env
+cp .env.example .env.docker
 ```
 
-Rediger `.env` og legg inn din Anthropic API-nøkkel:
+Rediger `.env.docker` og legg inn nødvendige verdier:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
+ADMIN_EMAIL=din@epost.no
 ```
 
-### 2. Start tjenester og kjør migrasjoner
+### 2. Start alle tjenester
 
 ```bash
-docker compose up -d db redis minio
-
-cd backend
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-alembic upgrade head
+docker compose --env-file .env.docker up -d
 ```
 
-### 3. Start backend og frontend
+Backend kjører på port 8000. Migrasjoner kjøres manuelt første gang:
 
 ```bash
-# Terminal 1 – backend (fra backend/ med venv aktivert)
-uvicorn app.main:app --reload
+docker exec reportchecker-backend alembic upgrade head
+```
 
-# Terminal 2 – frontend (fra frontend/)
+### 3. Start frontend
+
+```bash
+cd frontend
 npm install
 npm run dev
 ```
@@ -97,39 +75,37 @@ npm run dev
 - Backend API: http://localhost:8000
 - Swagger UI: http://localhost:8000/docs
 
-### Alternativ: Kjør alt med Docker (Linux)
+### Innlogging
+
+Appen bruker magic link-innlogging. Admin-brukeren opprettes automatisk fra `ADMIN_EMAIL` ved oppstart. Magic link printes til backend-loggene når SMTP ikke er konfigurert:
 
 ```bash
-docker compose up -d
+docker logs reportchecker-backend | grep "MAGIC LINK"
 ```
+
+**Merk:** Utviklingsmiljøet bruker `network_mode: host` og PostgreSQL på port 5433 (for å unngå kollisjon med eventuelle lokale postgres-instanser).
+
+---
+
+## Anonymiseringsflyt
+
+1. Last opp PDF → appen ekstraherer navn og initialer som forslag
+2. Hvert navn får et fast 6-sifret kandidatnummer (samme navn → samme nummer alltid)
+3. Bruker verifiserer/korrigerer tabellen og legger til eventuelle navn-varianter (kommaseparert)
+4. Appen gjør søk-og-erstatt gjennom hele PDF-en og genererer ny anonymisert forside
+5. Last ned anonymisert PDF og mapping-fil (navn ↔ kandidatnummer)
+
+**Begrensninger:** Tekst som er brutt over linjer eller ligger i scannede bilder erstattes ikke.
 
 ---
 
 ## Bruk
 
-1. Åpne http://localhost:3000
-2. Klikk **"Last opp rapport"** og velg en PDF eller Word-fil
-3. Vent til rapporten er prosessert (status: "Klar")
-4. Klikk **"Start evaluering"**
+1. Åpne http://localhost:3000 og logg inn
+2. Klikk **"Last opp rapport"** og velg en PDF
+3. Gå gjennom anonymiseringssteget og last ned anonymisert PDF
+4. Klikk **"Start evaluering"** på rapporten
 5. Se detaljerte resultater med score og tilbakemelding per kriterie
-
----
-
-## Lage en ny release (Windows-installer)
-
-Når du er klar til å distribuere en ny versjon:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-GitHub Actions bygger da automatisk:
-1. Backend-image (`Dockerfile.prod`) og frontend-image pushet til `ghcr.io`
-2. `ReportChecker-Setup.exe` via Inno Setup på Windows-runner
-3. Installer-filen lastes opp som asset på GitHub Release-siden
-
-Brukere laster ned `.exe`-filen fra [Releases](../../releases).
 
 ---
 
@@ -137,29 +113,26 @@ Brukere laster ned `.exe`-filen fra [Releases](../../releases).
 
 ```
 reportchecker/
-├── frontend/                  # Next.js app
-│   ├── Dockerfile             # Produksjons-image
+├── frontend/                        # Next.js app
 │   └── src/
-│       ├── app/               # Sider (Next.js App Router)
-│       ├── components/        # React-komponenter
-│       └── types/             # TypeScript-typer
-├── backend/                   # FastAPI app
-│   ├── Dockerfile             # Utviklings-image (med corp-certs)
-│   ├── Dockerfile.prod        # Produksjons-image (uten corp-certs)
+│       ├── app/                     # Sider (Next.js App Router)
+│       │   ├── reports/upload/      # Opplasting
+│       │   ├── reports/[id]/        # Rapport + evaluering
+│       │   ├── reports/[id]/anonymize/  # Anonymisering
+│       │   ├── agents/              # Agent-konfigurasjon
+│       │   ├── login/               # Innlogging
+│       │   └── auth/verify/         # Magic link-verifisering
+│       └── lib/api.ts               # API-klient med cookie-håndtering
+├── backend/                         # FastAPI app
 │   ├── app/
-│   │   ├── api/               # API-ruter
-│   │   ├── models/            # Database-modeller
-│   │   ├── services/          # Forretningslogikk
-│   │   └── ai/                # Claude-evaluering
-│   └── alembic/               # Databasemigrasjoner
-├── installer/                 # Windows-installer
-│   ├── reportchecker.iss      # Inno Setup-script
-│   ├── start.bat              # Starter alle tjenester
-│   └── stop.bat               # Stopper alle tjenester
-├── docker-compose.yml         # Utviklingsmiljø (Linux, network_mode: host)
-├── docker-compose.prod.yml    # Produksjonsmiljø (Windows-kompatibel)
-└── .github/workflows/
-    └── build-release.yml      # Bygger images + installer ved tagging
+│   │   ├── api/routes/              # API-endepunkter
+│   │   ├── models/                  # Database-modeller
+│   │   ├── services/                # Forretningslogikk
+│   │   ├── document_processing/     # PDF-ekstraksjon og anonymisering
+│   │   └── core/                    # Auth, database, storage
+│   └── alembic/versions/            # Databasemigrasjoner
+├── docker-compose.yml               # Utviklingsmiljø
+└── .env.docker.example              # Mal for miljøvariabler
 ```
 
 ## Lisens
