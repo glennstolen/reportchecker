@@ -4,7 +4,7 @@ services:
     container_name: reportchecker-db
     environment:
       POSTGRES_USER: reportchecker
-      POSTGRES_PASSWORD: reportchecker_prod
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: reportchecker
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -15,6 +15,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -28,32 +29,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   minio:
     image: minio/minio:latest
     container_name: reportchecker-minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
     volumes:
       - minio_data:/data
     networks:
       - reportchecker-net
+    restart: unless-stopped
 
   backend:
     image: ghcr.io/glennstolen/reportchecker/backend:latest
     container_name: reportchecker-backend
-    ports:
-      - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://reportchecker:reportchecker_prod@db:5432/reportchecker
+      DATABASE_URL: postgresql://reportchecker:${POSTGRES_PASSWORD}@db:5432/reportchecker
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: reports
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     depends_on:
       db:
@@ -64,16 +66,35 @@ services:
         condition: service_started
     networks:
       - reportchecker-net
+    restart: unless-stopped
 
   frontend:
     image: ghcr.io/glennstolen/reportchecker/frontend:latest
     container_name: reportchecker-frontend
-    ports:
-      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ""  # Tom = same-origin, Caddy ruter /api/* til backend
     depends_on:
       - backend
     networks:
       - reportchecker-net
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: reportchecker-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - reportchecker-net
+    restart: unless-stopped
 
 networks:
   reportchecker-net:
@@ -82,3 +103,5 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  caddy_data:
+  caddy_config:
