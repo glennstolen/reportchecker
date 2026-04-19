@@ -10,6 +10,7 @@ import {
   Pencil,
   X,
   Plus,
+  Download,
 } from "lucide-react";
 
 interface Criterion {
@@ -114,13 +115,40 @@ export default function AgentsPage() {
 
   const totalMaxScore = agents.reduce((sum, a) => sum + a.max_score, 0);
 
+  const exportCriteriaPdf = async () => {
+    try {
+      const response = await apiFetch("/api/agents/export-criteria-pdf");
+      if (!response.ok) return;
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "vurderingskriterier.pdf";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (error) {
+      console.error("Failed to export criteria PDF:", error);
+    }
+  };
+
   return (
     <div className="px-4">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Vurderingsagenter</h1>
-        <p className="text-gray-600 mt-1">
-          {agents.length} agenter | Total maks score: {totalMaxScore}
-        </p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Vurderingsagenter</h1>
+          <p className="text-gray-600 mt-1">
+            {agents.length} agenter | Total maks score: {totalMaxScore}
+          </p>
+        </div>
+        <button
+          onClick={exportCriteriaPdf}
+          className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50 text-sm text-gray-700"
+        >
+          <Download className="w-4 h-4" />
+          Eksporter vurderingskriterier
+        </button>
       </div>
 
       <div className="space-y-4">

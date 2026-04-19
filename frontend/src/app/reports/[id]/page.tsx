@@ -5,6 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import { apiFetch, API_BASE, patchAgentResult } from "@/lib/api";
 import { Play, CheckCircle, XCircle, Clock, AlertCircle, ChevronDown, ChevronUp, Loader2, UserX, List, Minus, Pencil } from "lucide-react";
 
+interface CandidateMapping {
+  name: string;
+  initials: string;
+  candidate_number: string;
+}
+
 interface Report {
   id: number;
   title: string;
@@ -14,6 +20,8 @@ interface Report {
   created_at: string;
   anonymized_file_path: string | null;
   mapping_file_path: string | null;
+  candidate_mappings: CandidateMapping[] | null;
+  kandidater: number[] | null;
 }
 
 interface Agent {
@@ -321,8 +329,21 @@ export default function ReportDetailPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{report.title}</h1>
-            <p className="text-gray-600">
-              {report.filename} - {new Date(report.created_at).toLocaleDateString("no-NO")}
+            {report.candidate_mappings && report.candidate_mappings.length > 0 && (
+              <p className="text-gray-800 font-medium mt-0.5">
+                {report.candidate_mappings.map((m) => `${m.name} (${m.candidate_number})`).join(", ")}
+              </p>
+            )}
+            <p className="text-gray-500 text-sm mt-0.5 flex items-center gap-2">
+              {report.filename}
+              {report.anonymized_file_path && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                  <CheckCircle className="w-3 h-3" />
+                  Anonymisert
+                </span>
+              )}
+              <span className="text-gray-400">·</span>
+              {new Date(report.created_at).toLocaleDateString("no-NO")}
             </p>
           </div>
           <div className="flex gap-2">
@@ -337,12 +358,6 @@ export default function ReportDetailPage() {
             )}
           </div>
         </div>
-        {report.anonymized_file_path && (
-          <div className="mt-2 inline-flex items-center gap-2 px-2 py-1 bg-green-100 text-green-700 rounded text-sm">
-            <CheckCircle className="w-4 h-4" />
-            Anonymisert
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
