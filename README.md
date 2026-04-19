@@ -82,11 +82,19 @@ Rediger `.env` og fyll inn alle verdier:
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 ADMIN_EMAIL=din@epost.no
-DOMAIN=62.238.2.210          # IP-adresse eller domenenavn
+DOMAIN=62.238.2.210              # IP-adresse eller domenenavn
+APP_URL=http://62.238.2.210      # Samme som DOMAIN, men med http(s)://
 POSTGRES_PASSWORD=sterkt_passord
 MINIO_ACCESS_KEY=bruker
 MINIO_SECRET_KEY=sterkt_passord
-APP_URL=http://62.238.2.210  # Samme som DOMAIN, men med http(s)://
+JWT_SECRET=lang_tilfeldig_streng # generer med: openssl rand -hex 32
+
+# E-post (Brevo) — se eget avsnitt nedenfor
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_USER=din@epost.no
+SMTP_PASSWORD=xsmtpsib-...
+SMTP_FROM=din@epost.no
 ```
 
 ### 3. Start alle tjenester
@@ -101,15 +109,35 @@ Docker-images hentes automatisk fra GHCR. Backend kjører `alembic upgrade head`
 
 Åpne kun port 22 (SSH), 80 (HTTP) og 443 (HTTPS). Alle andre porter (3000, 8000, 5432 osv.) skal være stengt – all trafikk rutes gjennom Caddy.
 
-### 5. Innlogging
+### 5. E-post med magic link (Brevo)
 
-Appen bruker magic link-innlogging. Siden SMTP ikke er konfigurert som standard, printes lenken i backend-loggen:
+Uten SMTP-konfigurasjon printes innloggingslenken kun i backend-loggen:
 
 ```bash
 docker logs reportchecker-backend 2>&1 | grep "MAGIC LINK"
 ```
 
-Åpne lenken i nettleseren for å logge inn.
+For å aktivere e-postutsending via Brevo:
+
+1. Opprett gratis konto på [brevo.com](https://www.brevo.com) (ingen kredittkort)
+2. Gå til **SMTP & API → SMTP** og generer en SMTP-nøkkel
+3. Gå til **Senders & IP → Senders** og verifiser avsenderadressen din (kan være en Gmail-adresse)
+4. Legg til i `.env` på serveren:
+   ```
+   SMTP_HOST=smtp-relay.brevo.com
+   SMTP_PORT=587
+   SMTP_USER=din@epost.no       # Brevo-innloggingsepost
+   SMTP_PASSWORD=xsmtpsib-...   # SMTP-nøkkel fra Brevo
+   SMTP_FROM=din@epost.no       # må være verifisert i Brevo
+   ```
+5. Restart backend:
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d backend
+   ```
+
+### 6. Innlogging
+
+Gå til appens URL og skriv inn e-postadressen registrert som `ADMIN_EMAIL`. Du mottar en magic link på e-post (eller i loggen om SMTP ikke er satt opp). Lenken er gyldig i 15 minutter.
 
 ---
 
