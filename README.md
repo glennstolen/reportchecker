@@ -18,6 +18,7 @@ AI-assistert vurdering og anonymisering av labrapporter i bioteknologi og biokje
 - Score per kriterie med detaljert tilbakemelding
 - **Instruktøroverstyring:** foreleser kan korrigere score og legge til kommentar per sjekker – både AI-score og instruktørscore vises
 - PDF-eksport av evalueringsresultater (inkl. instruktøroverstyringer)
+- Eksport av vurderingskriterier som PDF
 - Magic link-innlogging (ingen passord)
 - Last ned global kandidatnummer-mapping som CSV
 
@@ -32,6 +33,63 @@ AI-assistert vurdering og anonymisering av labrapporter i bioteknologi og biokje
 
 ---
 
+## Produksjonsoppsett (Hetzner / VPS)
+
+### Forutsetninger
+
+- En VPS med Ubuntu og Docker installert (f.eks. Hetzner CX22 ~4 EUR/mnd)
+- Et domene eller server-IP
+- En Anthropic API-nøkkel
+
+### 1. Hent kodebasen
+
+```bash
+git clone https://github.com/glennstolen/reportchecker /opt/reportchecker
+cd /opt/reportchecker
+```
+
+### 2. Konfigurer miljøvariabler
+
+```bash
+cp .env.docker.example .env
+```
+
+Rediger `.env` og fyll inn alle verdier:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+ADMIN_EMAIL=din@epost.no
+DOMAIN=62.238.2.210          # IP-adresse eller domenenavn
+POSTGRES_PASSWORD=sterkt_passord
+MINIO_ACCESS_KEY=bruker
+MINIO_SECRET_KEY=sterkt_passord
+APP_URL=http://62.238.2.210  # Samme som DOMAIN, men med http(s)://
+```
+
+### 3. Start alle tjenester
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Docker-images hentes automatisk fra GHCR. Backend kjører `alembic upgrade head` og oppretter admin-bruker fra `ADMIN_EMAIL` ved første oppstart.
+
+### 4. Brannmur
+
+Åpne kun port 22 (SSH), 80 (HTTP) og 443 (HTTPS). Alle andre porter (3000, 8000, 5432 osv.) skal være stengt – all trafikk rutes gjennom Caddy.
+
+### 5. Innlogging
+
+Appen bruker magic link-innlogging. Siden SMTP ikke er konfigurert som standard, printes lenken i backend-loggen:
+
+```bash
+docker logs reportchecker-backend 2>&1 | grep "MAGIC LINK"
+```
+
+Åpne lenken i nettleseren for å logge inn.
+
+---
+
 ## Utviklingsoppsett
 
 ### Forutsetninger
@@ -43,10 +101,10 @@ AI-assistert vurdering og anonymisering av labrapporter i bioteknologi og biokje
 ### 1. Konfigurer miljøvariabler
 
 ```bash
-cp .env.example .env.docker
+cp .env.docker.example .env.docker
 ```
 
-Rediger `.env.docker` og legg inn nødvendige verdier:
+Rediger `.env.docker`:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
@@ -57,12 +115,6 @@ ADMIN_EMAIL=din@epost.no
 
 ```bash
 docker compose --env-file .env.docker up -d
-```
-
-Backend kjører på port 8000. Migrasjoner kjøres manuelt første gang:
-
-```bash
-docker exec reportchecker-backend alembic upgrade head
 ```
 
 ### 3. Start frontend
@@ -77,9 +129,7 @@ npm run dev
 - Backend API: http://localhost:8000
 - Swagger UI: http://localhost:8000/docs
 
-### Innlogging
-
-Appen bruker magic link-innlogging. Admin-brukeren opprettes automatisk fra `ADMIN_EMAIL` ved oppstart. Magic link printes til backend-loggene når SMTP ikke er konfigurert:
+Magic link printes i backend-loggen:
 
 ```bash
 docker logs reportchecker-backend | grep "MAGIC LINK"
@@ -115,7 +165,7 @@ Etter at en AI-evaluering er gjennomført kan foreleser justere vurderingen:
 
 ## Bruk
 
-1. Åpne http://localhost:3000 og logg inn
+1. Åpne appens URL og logg inn via magic link
 2. Klikk **"Last opp rapport"** og velg en PDF
 3. Gå gjennom anonymiseringssteget
 4. Klikk **"Start evaluering"** på rapporten
@@ -150,6 +200,8 @@ reportchecker/
 │   │   └── core/                    # Auth, database, storage
 │   └── alembic/versions/            # Databasemigrasjoner
 ├── docker-compose.yml               # Utviklingsmiljø
+├── docker-compose.prod.yml          # Produksjonsmiljø
+├── Caddyfile                        # Reverse proxy-konfigurasjon
 └── .env.docker.example              # Mal for miljøvariabler
 ```
 
