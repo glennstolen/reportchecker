@@ -37,9 +37,32 @@ AI-assistert vurdering og anonymisering av labrapporter i bioteknologi og biokje
 
 ### Forutsetninger
 
-- En VPS med Ubuntu og Docker installert (f.eks. Hetzner CX22 ~4 EUR/mnd)
-- Et domene eller server-IP
+- En Hetzner-konto (hetzner.com)
+- En SSH-nøkkel registrert i Hetzner
 - En Anthropic API-nøkkel
+
+### 0. Opprett server i Hetzner
+
+1. Gå til **Hetzner Cloud Console → Projects → Add Server**
+2. Velg: Location = Helsinki, Image = **Ubuntu 24.04**, Type = **CX22** (~4 EUR/mnd)
+3. Under **SSH keys**: legg til din offentlige nøkkel (generer med `ssh-keygen -t ed25519` om du ikke har en)
+4. Opprett serveren og noter IP-adressen
+
+**Installer Docker på serveren:**
+
+```bash
+ssh root@<SERVER-IP>
+curl -fsSL https://get.docker.com | sh
+```
+
+**Brannmur i Hetzner Console:**
+
+Gå til **Firewalls → Create Firewall** og tillat kun innkommende trafikk på:
+- Port 22 (SSH)
+- Port 80 (HTTP)
+- Port 443 (HTTPS)
+
+Koble brannmuren til serveren under **Resources**-fanen.
 
 ### 1. Hent kodebasen
 
