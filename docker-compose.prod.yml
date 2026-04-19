@@ -57,6 +57,12 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       APP_URL: http://${DOMAIN}
+      SMTP_HOST: ${SMTP_HOST:-smtp-relay.brevo.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     depends_on:
       db:
