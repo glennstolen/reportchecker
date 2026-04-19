@@ -1,12 +1,11 @@
-"""Initial schema with all tables and seed data
+"""Initial schema
 
 Revision ID: 001
 Revises:
-Create Date: 2026-04-06
-
-Flattened from 10 migrations into one. Includes full schema and 7 agent templates.
+Create Date: 2026-04-19
 """
 import json
+import os
 from typing import Sequence, Union
 
 from alembic import op
@@ -212,8 +211,9 @@ def upgrade() -> None:
         'users',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('email', sa.String(255), nullable=False),
-        sa.Column('name', sa.String(255), nullable=False),
+        sa.Column('name', sa.String(255), nullable=True),
         sa.Column('role', sa.String(50), nullable=True, server_default='lecturer'),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.PrimaryKeyConstraint('id'),
     )
@@ -274,6 +274,7 @@ def upgrade() -> None:
         sa.Column('total_score', sa.Float(), nullable=True),
         sa.Column('max_possible_score', sa.Float(), nullable=True),
         sa.Column('summary', sa.Text(), nullable=True),
+        sa.Column('instructor_total_score', sa.Float(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.ForeignKeyConstraint(['report_id'], ['reports.id']),
         sa.ForeignKeyConstraint(['user_id'], ['users.id']),
@@ -290,19 +291,33 @@ def upgrade() -> None:
         sa.Column('score', sa.Float(), nullable=True),
         sa.Column('max_score', sa.Float(), nullable=True),
         sa.Column('feedback', sa.Text(), nullable=True),
+        sa.Column('instructor_score', sa.Float(), nullable=True),
+        sa.Column('instructor_comment', sa.Text(), nullable=True),
         sa.Column('details', sa.JSON(), nullable=True),
+        sa.Column('prompt_used', sa.Text(), nullable=True),
+        sa.Column('raw_response', sa.Text(), nullable=True),
         sa.Column('status', sa.Enum('PENDING', 'RUNNING', 'COMPLETED', 'ERROR',
                                     name='evaluationstatus', create_type=False),
                   nullable=True, server_default='PENDING'),
         sa.Column('error_message', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('prompt_used', sa.Text(), nullable=True),
-        sa.Column('raw_response', sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(['evaluation_id'], ['evaluations.id']),
         sa.ForeignKeyConstraint(['agent_config_id'], ['agent_configurations.id']),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_agent_results_id', 'agent_results', ['id'])
+
+    # Candidate registry table
+    op.create_table(
+        'candidate_registry',
+        sa.Column('id', sa.Integer(), primary_key=True),
+        sa.Column('name_normalized', sa.String(500), nullable=False),
+        sa.Column('candidate_number', sa.String(6), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.UniqueConstraint('name_normalized'),
+        sa.UniqueConstraint('candidate_number'),
+    )
+    op.create_index('ix_candidate_registry_name_normalized', 'candidate_registry', ['name_normalized'])
 
     # Seed agent templates
     conn = op.get_bind()
@@ -320,8 +335,24 @@ def upgrade() -> None:
             }
         )
 
+    # Seed admin user from ADMIN_EMAIL env var
+    admin_email = os.environ.get("ADMIN_EMAIL", "")
+    if admin_email:
+        existing = conn.execute(
+            sa.text("SELECT id FROM users WHERE email = :email"),
+            {"email": admin_email},
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                sa.text("INSERT INTO users (email, is_active) VALUES (:email, true)"),
+                {"email": admin_email},
+            )
+            print(f"Admin-bruker opprettet: {admin_email}")
+
 
 def downgrade() -> None:
+    op.drop_index('ix_candidate_registry_name_normalized', 'candidate_registry')
+    op.drop_table('candidate_registry')
     op.drop_table('agent_results')
     op.drop_table('evaluations')
     op.drop_table('agent_configurations')
