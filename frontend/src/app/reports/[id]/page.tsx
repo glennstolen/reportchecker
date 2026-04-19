@@ -76,6 +76,7 @@ interface StreamingAgent {
   score?: number | null;
   feedback?: string | null;
   details?: CriterionDetail[] | null;
+  error?: string | null;
 }
 
 export default function ReportDetailPage() {
@@ -271,6 +272,7 @@ export default function ReportDetailPage() {
                       next.set(data.agent_id, {
                         ...agent,
                         status: "error",
+                        error: data.error ?? null,
                       });
                     }
                     return next;
@@ -482,7 +484,11 @@ export default function ReportDetailPage() {
                     {/* Agent info */}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900">{agent.name}</p>
-                      <p className="text-sm text-gray-600 truncate">{agent.description}</p>
+                      {agent.status === "error" && agent.error ? (
+                        <p className="text-sm text-red-600 mt-0.5">{agent.error}</p>
+                      ) : (
+                        <p className="text-sm text-gray-600 truncate">{agent.description}</p>
+                      )}
                     </div>
 
                     {/* Score (when completed) */}

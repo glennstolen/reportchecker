@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
+import anthropic as anthropic_sdk
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -187,18 +188,33 @@ async def create_evaluation_stream(
 
             except Exception as e:
                 import traceback
-                error_detail = f"{type(e).__name__}: {str(e)}"
-                print(f"Agent {agent.name} failed: {error_detail}")
+                print(f"Agent {agent.name} failed: {type(e).__name__}: {e}")
                 print(traceback.format_exc())
 
+                # Translate known Anthropic API errors to user-friendly Norwegian messages
+                if isinstance(e, anthropic_sdk.PermissionDeniedError):
+                    user_message = "Anthropic-kontoen har ikke tilgang. Sjekk at API-nøkkelen er gyldig og at kontoen har tilstrekkelige kreditter."
+                elif isinstance(e, anthropic_sdk.AuthenticationError):
+                    user_message = "Ugyldig Anthropic API-nøkkel. Kontroller innstillingene."
+                elif isinstance(e, anthropic_sdk.RateLimitError):
+                    user_message = "Claude API-grensen er nådd (rate limit). Vent litt og prøv igjen."
+                elif isinstance(e, anthropic_sdk.APITimeoutError):
+                    user_message = "Forespørselen til Claude tok for lang tid. Prøv igjen."
+                elif isinstance(e, anthropic_sdk.InternalServerError):
+                    user_message = "Feil hos Anthropic. Prøv igjen om litt."
+                elif isinstance(e, anthropic_sdk.APIConnectionError):
+                    user_message = "Kunne ikke nå Claude API. Sjekk nettverkstilkoblingen."
+                else:
+                    user_message = f"Uventet feil: {type(e).__name__}: {str(e)}"
+
                 agent_result.status = EvaluationStatus.ERROR
-                agent_result.error_message = error_detail
+                agent_result.error_message = user_message
                 agent_result.raw_response = full_response
 
                 await result_queue.put({
                     'type': 'agent_error',
                     'agent_id': agent.id,
-                    'error': error_detail,
+                    'error': user_message,
                 })
 
         # Run agent evaluations sequentially to avoid rate limiting
