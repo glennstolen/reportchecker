@@ -25,6 +25,7 @@ from app.schemas.report import (
     ExtractInfoResponse,
     ExtractInfoAuthor,
 )
+from app.models.candidate_registry import CandidateRegistry
 from app.services.report_service import ReportService
 from app.services.candidate_service import get_or_create_candidate_number
 from app.document_processing.pdf_anonymizer import (
@@ -92,6 +93,22 @@ def list_reports(db: Session = Depends(get_db)):
     return result
 
 
+@router.get("/candidate-mapping-export")
+def export_candidate_mapping(db: Session = Depends(get_db)):
+    """Download all candidate number → name mappings as a text file."""
+    entries = db.query(CandidateRegistry).order_by(CandidateRegistry.candidate_number).all()
+    lines = ["Kandidatnummer,Navn"]
+    for entry in entries:
+        name = entry.name_normalized.title()
+        lines.append(f"{entry.candidate_number},{name}")
+    content = "\n".join(lines).encode("utf-8-sig")  # utf-8-sig for Excel compatibility
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="kandidatnummer_mapping.csv"'},
+    )
+
+
 @router.get("/{report_id}", response_model=ReportResponse)
 def get_report(report_id: int, db: Session = Depends(get_db)):
     """Get a specific report by ID."""
@@ -108,75 +125,130 @@ def export_report_pdf(report_id: int, db: Session = Depends(get_db)):
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    # Get completed evaluations
     completed_evals = [e for e in report.evaluations if e.status == EvaluationStatus.COMPLETED]
     if not completed_evals:
         raise HTTPException(status_code=400, detail="No completed evaluations to export")
 
-    # Get latest evaluation
     latest_eval = max(completed_evals, key=lambda e: e.created_at)
 
-    # Create PDF
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm, leftMargin=2*cm, rightMargin=2*cm)
 
-    # Styles
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18, spaceAfter=20)
-    heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], fontSize=14, spaceAfter=10, spaceBefore=15)
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18, spaceAfter=12)
+    heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], fontSize=13, spaceAfter=6, spaceBefore=14)
     normal_style = styles['Normal']
-    feedback_style = ParagraphStyle('Feedback', parent=styles['Normal'], fontSize=10, textColor=colors.grey)
+    small_style = ParagraphStyle('Small', parent=styles['Normal'], fontSize=9)
+    small_grey_style = ParagraphStyle('SmallGrey', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#555555'))
+    label_style = ParagraphStyle('Label', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#888888'))
+    instructor_style = ParagraphStyle('Instructor', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#c2410c'))
+
+    # Usable page width (A4 minus margins)
+    PAGE_WIDTH = A4[0] - 4*cm
 
     elements = []
 
-    # Title
+    # Title block
     elements.append(Paragraph(f"Evalueringsrapport: {report.title}", title_style))
     elements.append(Paragraph(f"Fil: {report.filename}", normal_style))
-    elements.append(Paragraph(f"Evaluert: {latest_eval.completed_at.strftime('%d.%m.%Y %H:%M') if latest_eval.completed_at else 'N/A'}", normal_style))
-    elements.append(Spacer(1, 0.5*cm))
+    elements.append(Paragraph(
+        f"Evaluert: {latest_eval.completed_at.strftime('%d.%m.%Y %H:%M') if latest_eval.completed_at else 'N/A'}",
+        normal_style,
+    ))
+    elements.append(Spacer(1, 0.4*cm))
 
-    # Total score
-    if latest_eval.total_score is not None:
-        score_pct = (latest_eval.total_score / latest_eval.max_possible_score * 100) if latest_eval.max_possible_score else 0
-        elements.append(Paragraph(f"<b>Total score: {latest_eval.total_score:.1f} / {latest_eval.max_possible_score:.1f} ({score_pct:.0f}%)</b>", heading_style))
-    elements.append(Spacer(1, 0.5*cm))
+    # Total score block
+    if latest_eval.total_score is not None and latest_eval.max_possible_score:
+        ai_pct = latest_eval.total_score / latest_eval.max_possible_score * 100
+        score_text = f"<b>AI-score: {ai_pct:.1f} %</b>"
+        if latest_eval.instructor_total_score is not None:
+            instr_pct = latest_eval.instructor_total_score / latest_eval.max_possible_score * 100
+            score_text += f"&nbsp;&nbsp;&nbsp;&nbsp;<font color='#c2410c'><b>Instruktørscore: {instr_pct:.1f} %</b></font>"
+        elements.append(Paragraph(score_text, heading_style))
 
-    # Agent results
-    for result in latest_eval.agent_results:
+    elements.append(Spacer(1, 0.4*cm))
+
+    # Sort agent results by agent_config_id to keep stable order
+    sorted_results = sorted(latest_eval.agent_results, key=lambda r: r.agent_config_id)
+
+    for result in sorted_results:
         if result.status != EvaluationStatus.COMPLETED:
             continue
 
         agent_name = result.agent_configuration.name
         agent_desc = result.agent_configuration.description or ""
 
-        elements.append(Paragraph(f"{agent_name}", heading_style))
-        elements.append(Paragraph(agent_desc, feedback_style))
+        elements.append(Paragraph(agent_name, heading_style))
+        if agent_desc:
+            elements.append(Paragraph(agent_desc, small_grey_style))
 
-        if result.score is not None:
-            elements.append(Paragraph(f"Score: {result.score:.1f} / {result.max_score:.1f}", normal_style))
+        # Score line — show weighted score like the frontend: (score/100) * max_score
+        if result.score is not None and result.max_score is not None:
+            weighted = (result.score / 100) * result.max_score
+            score_line = f"<b>AI-score: {weighted:.1f} / {result.max_score:.1f} p</b>"
+            if result.instructor_score is not None:
+                instr_weighted = (result.instructor_score / 100) * result.max_score
+                score_line += f"&nbsp;&nbsp;<font color='#c2410c'><b>Instruktørscore: {instr_weighted:.1f} / {result.max_score:.1f} p</b></font>"
+            elements.append(Paragraph(score_line, normal_style))
 
         if result.feedback:
-            elements.append(Paragraph(f"Tilbakemelding: {result.feedback}", normal_style))
+            elements.append(Spacer(1, 0.15*cm))
+            elements.append(Paragraph(result.feedback, small_style))
 
-        # Details table
+        # Instructor comment
+        if result.instructor_comment:
+            elements.append(Spacer(1, 0.1*cm))
+            elements.append(Paragraph(f"<b>Instruktørkommentar:</b> {result.instructor_comment}", instructor_style))
+
+        # Criteria details table — use Paragraph in cells so text wraps
         if result.details:
-            table_data = [["Kriterie", "Status", "Kommentar"]]
+            col_criterion = 4.5*cm
+            col_status = 1.5*cm
+            col_score = 2*cm
+            col_comment = PAGE_WIDTH - col_criterion - col_status - col_score
+
+            header_para_style = ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, fontName='Helvetica-Bold')
+            cell_para_style = ParagraphStyle('TD', parent=styles['Normal'], fontSize=8)
+
+            table_data = [[
+                Paragraph("Kriterie", header_para_style),
+                Paragraph("Status", header_para_style),
+                Paragraph("Score", header_para_style),
+                Paragraph("Kommentar", header_para_style),
+            ]]
+
             for detail in result.details:
-                status = "✓" if detail.get("passed") else "✗"
+                applicable = detail.get("applicable", True)
+                has_score = detail.get("score") is not None and detail.get("max_score") is not None
+                passed = detail.get("passed")
+
+                if not applicable:
+                    status_str = "N/A"
+                elif has_score:
+                    status_str = "✓" if detail["score"] >= detail["max_score"] * 0.5 else "✗"
+                else:
+                    status_str = "✓" if passed else "✗"
+
+                score_str = f"{detail['score']} av {detail['max_score']}" if has_score else ""
+
                 table_data.append([
-                    detail.get("criterion", ""),
-                    status,
-                    detail.get("comment", "")[:50] + "..." if len(detail.get("comment", "")) > 50 else detail.get("comment", "")
+                    Paragraph(detail.get("criterion", ""), cell_para_style),
+                    Paragraph(status_str, cell_para_style),
+                    Paragraph(score_str, cell_para_style),
+                    Paragraph(detail.get("comment", ""), cell_para_style),
                 ])
 
-            table = Table(table_data, colWidths=[5*cm, 1.5*cm, 10*cm])
+            table = Table(table_data, colWidths=[col_criterion, col_status, col_score, col_comment])
             table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e5e7eb')),
                 ('ALIGN', (1, 0), (1, -1), 'CENTER'),
-                ('FONTSIZE', (0, 0), (-1, -1), 9),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d1d5db')),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ]))
             elements.append(Spacer(1, 0.3*cm))
@@ -184,11 +256,9 @@ def export_report_pdf(report_id: int, db: Session = Depends(get_db)):
 
         elements.append(Spacer(1, 0.5*cm))
 
-    # Build PDF
     doc.build(elements)
     buffer.seek(0)
 
-    # Sanitize filename - remove special characters that break Content-Disposition
     safe_title = re.sub(r'[^\w\s-]', '', report.title).replace(' ', '_')
     filename = f"evaluering_{safe_title}.pdf"
     return StreamingResponse(

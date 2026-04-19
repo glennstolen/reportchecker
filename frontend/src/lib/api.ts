@@ -22,3 +22,20 @@ export async function apiFetch(
 
   return response;
 }
+
+export async function patchAgentResult(
+  evaluationId: number,
+  agentResultId: number,
+  body: { instructor_score?: number | null; instructor_comment?: string | null }
+) {
+  const response = await apiFetch(
+    `/api/evaluations/${evaluationId}/agent-results/${agentResultId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+  if (!response.ok) throw new Error("Failed to save instructor override");
+  return response.json();
+}

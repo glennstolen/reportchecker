@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { apiFetch, API_BASE } from "@/lib/api";
-import { Play, CheckCircle, XCircle, Clock, AlertCircle, ChevronDown, ChevronUp, Loader2, UserX, Download, List, Minus } from "lucide-react";
+import { apiFetch, API_BASE, patchAgentResult } from "@/lib/api";
+import { Play, CheckCircle, XCircle, Clock, AlertCircle, ChevronDown, ChevronUp, Loader2, UserX, List, Minus, Pencil } from "lucide-react";
 
 interface Report {
   id: number;
@@ -44,6 +44,8 @@ interface AgentResult {
   status: string;
   prompt_used?: string | null;
   raw_response?: string | null;
+  instructor_score: number | null;
+  instructor_comment: string | null;
 }
 
 interface Evaluation {
@@ -54,6 +56,7 @@ interface Evaluation {
   summary: string | null;
   agent_results: AgentResult[];
   created_at: string;
+  instructor_total_score: number | null;
 }
 
 interface StreamingAgent {
@@ -83,16 +86,49 @@ export default function ReportDetailPage() {
   const [streamingAgents, setStreamingAgents] = useState<Map<number, StreamingAgent>>(new Map());
   const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set());
 
-  const downloadFile = async (path: string, filename: string) => {
-    const response = await apiFetch(path);
-    const blob = await response.blob();
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
+  // Instructor override state: agentResultId -> { score, comment }
+  const [editingResultId, setEditingResultId] = useState<number | null>(null);
+  const [editScore, setEditScore] = useState<string>("");
+  const [editComment, setEditComment] = useState<string>("");
+  const [savingOverride, setSavingOverride] = useState(false);
+
+  const sortedEvaluation = (eval_: Evaluation): Evaluation => ({
+    ...eval_,
+    agent_results: [...eval_.agent_results].sort((a, b) => {
+      const ia = agents.findIndex((ag) => ag.id === a.agent_config_id);
+      const ib = agents.findIndex((ag) => ag.id === b.agent_config_id);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    }),
+  });
+
+  const startEditing = (result: AgentResult) => {
+    setEditingResultId(result.id);
+    setEditScore(result.instructor_score !== null ? String(result.instructor_score) : "");
+    setEditComment(result.instructor_comment ?? "");
+  };
+
+  const cancelEditing = () => {
+    setEditingResultId(null);
+    setEditScore("");
+    setEditComment("");
+  };
+
+  const saveOverride = async (evaluationId: number, agentResultId: number) => {
+    if (!evaluation) return;
+    setSavingOverride(true);
+    try {
+      const parsedScore = editScore.trim() !== "" ? parseFloat(editScore) : null;
+      const updatedEvaluation = await patchAgentResult(evaluationId, agentResultId, {
+        instructor_score: parsedScore,
+        instructor_comment: editComment.trim() !== "" ? editComment.trim() : null,
+      });
+      setEvaluation(sortedEvaluation(updatedEvaluation));
+      setEditingResultId(null);
+    } catch {
+      alert("Kunne ikke lagre endringen. Prøv igjen.");
+    } finally {
+      setSavingOverride(false);
+    }
   };
 
   const toggleResultExpanded = (resultId: number) => {
@@ -118,7 +154,15 @@ export default function ReportDetailPage() {
         setAgents(agentsData);
         setSelectedAgentIds(new Set(agentsData.map((a: Agent) => a.id)));
         if (evaluationsData.length > 0) {
-          setEvaluation(evaluationsData[0]);
+          const ev = evaluationsData[0];
+          setEvaluation({
+            ...ev,
+            agent_results: [...ev.agent_results].sort((a: AgentResult, b: AgentResult) => {
+              const ia = agentsData.findIndex((ag: Agent) => ag.id === a.agent_config_id);
+              const ib = agentsData.findIndex((ag: Agent) => ag.id === b.agent_config_id);
+              return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+            }),
+          });
         }
       })
       .finally(() => setLoading(false));
@@ -232,7 +276,7 @@ export default function ReportDetailPage() {
                       `/api/evaluations/${evaluationId}`
                     );
                     const evalData = await evalResponse.json();
-                    setEvaluation(evalData);
+                    setEvaluation(sortedEvaluation(evalData));
                   }
                   break;
               }
@@ -282,30 +326,7 @@ export default function ReportDetailPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            {report.anonymized_file_path ? (
-              <>
-                <button
-                  onClick={() => downloadFile(
-                    `/api/reports/${reportId}/anonymized-pdf`,
-                    `${report.title.replace(/\s+/g, "_")}_anonym.pdf`
-                  )}
-                  className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-gray-50 text-sm"
-                >
-                  <Download className="w-4 h-4" />
-                  Anonym PDF
-                </button>
-                <button
-                  onClick={() => downloadFile(
-                    `/api/reports/${reportId}/mapping-file`,
-                    `kandidatmapping_${report.title.replace(/\s+/g, "_")}.txt`
-                  )}
-                  className="flex items-center gap-2 px-3 py-2 border rounded-md hover:bg-gray-50 text-sm"
-                >
-                  <Download className="w-4 h-4" />
-                  Mapping
-                </button>
-              </>
-            ) : (
+            {!report.anonymized_file_path && (
               <button
                 onClick={() => router.push(`/reports/${reportId}/anonymize`)}
                 className="flex items-center gap-2 px-3 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm"
@@ -496,19 +517,42 @@ export default function ReportDetailPage() {
 
               {/* Total score */}
               {evaluation.total_score !== null && (
-                <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                  <p className="text-sm text-gray-600 mb-1">Total score</p>
-                  <p className="text-3xl font-bold text-gray-900">
-                    {evaluation.total_score.toFixed(1)} / {evaluation.max_possible_score?.toFixed(1)}
-                  </p>
-                  {evaluation.max_possible_score && (
-                    <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-600 rounded-full"
-                        style={{
-                          width: `${(evaluation.total_score / evaluation.max_possible_score) * 100}%`,
-                        }}
-                      />
+                <div className={`rounded-lg p-4 mb-6 ${evaluation.instructor_total_score !== null ? "grid grid-cols-2 gap-4" : "bg-gray-50"}`}>
+                  {/* AI score */}
+                  <div className={evaluation.instructor_total_score !== null ? "bg-blue-50 rounded-lg p-3" : ""}>
+                    <p className="text-sm text-gray-600 mb-1">
+                      {evaluation.instructor_total_score !== null ? "AI-score" : "Total score"}
+                    </p>
+                    <p className="text-3xl font-bold text-gray-900">
+                      {evaluation.max_possible_score ? ((evaluation.total_score / evaluation.max_possible_score) * 100).toFixed(1) : evaluation.total_score.toFixed(1)} %
+                    </p>
+                    {evaluation.max_possible_score && (
+                      <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-600 rounded-full"
+                          style={{
+                            width: `${(evaluation.total_score / evaluation.max_possible_score) * 100}%`,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Instructor score */}
+                  {evaluation.instructor_total_score !== null && evaluation.max_possible_score && (
+                    <div className="bg-orange-50 rounded-lg p-3">
+                      <p className="text-sm text-orange-700 mb-1">Instruktørscore</p>
+                      <p className="text-3xl font-bold text-gray-900">
+                        {((evaluation.instructor_total_score / evaluation.max_possible_score) * 100).toFixed(1)} %
+                      </p>
+                      <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-orange-500 rounded-full"
+                          style={{
+                            width: `${(evaluation.instructor_total_score / evaluation.max_possible_score) * 100}%`,
+                          }}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -525,15 +569,92 @@ export default function ReportDetailPage() {
                       <div className="flex items-center gap-2">
                         {getStatusIcon(result.status)}
                         {result.score !== null && result.max_score !== null && (
-                          <span className="font-semibold">
-                            {((result.score / 100) * result.max_score!).toFixed(1)} / {result.max_score} p
-                          </span>
+                          <div className="text-right">
+                            <span className="font-semibold text-blue-700">
+                              {((result.score / 100) * result.max_score).toFixed(1)} / {result.max_score} p
+                            </span>
+                            {result.instructor_score !== null && (
+                              <span className="ml-2 font-semibold text-orange-600">
+                                → {((result.instructor_score / 100) * result.max_score).toFixed(1)} p
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {result.status.toUpperCase() === "COMPLETED" && editingResultId !== result.id && (
+                          <button
+                            onClick={() => startEditing(result)}
+                            className="ml-1 p-1 text-gray-400 hover:text-gray-700 rounded"
+                            title="Korriger score"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
                         )}
                       </div>
                     </div>
 
                     {result.feedback && (
                       <p className="text-gray-600 text-sm mb-3">{result.feedback}</p>
+                    )}
+
+                    {/* Instructor comment display */}
+                    {result.instructor_comment && editingResultId !== result.id && (
+                      <div className="mb-3 px-3 py-2 bg-orange-50 border border-orange-200 rounded text-sm text-orange-800">
+                        <span className="font-medium">Instruktørkommentar: </span>
+                        {result.instructor_comment}
+                      </div>
+                    )}
+
+                    {/* Inline edit form */}
+                    {editingResultId === result.id && (
+                      <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg space-y-3">
+                        <p className="text-sm font-medium text-orange-800">Korriger vurdering</p>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">
+                            Score (0–100, tom = fjern overstyring)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={editScore}
+                            onChange={(e) => setEditScore(e.target.value)}
+                            placeholder={result.score !== null ? `AI: ${result.score.toFixed(0)}` : ""}
+                            className="w-32 px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                          />
+                          {editScore !== "" && result.max_score !== null && !isNaN(parseFloat(editScore)) && (
+                            <span className="ml-2 text-xs text-gray-500">
+                              = {((parseFloat(editScore) / 100) * result.max_score).toFixed(1)} / {result.max_score} p
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Kommentar (valgfri)</label>
+                          <textarea
+                            value={editComment}
+                            onChange={(e) => setEditComment(e.target.value)}
+                            rows={2}
+                            className="w-full px-2 py-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+                            placeholder="Legg til kommentar til studenten..."
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => saveOverride(evaluation.id, result.id)}
+                            disabled={savingOverride}
+                            className="px-3 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 disabled:opacity-50"
+                          >
+                            {savingOverride ? "Lagrer..." : "Lagre"}
+                          </button>
+                          <button
+                            onClick={cancelEditing}
+                            disabled={savingOverride}
+                            className="px-3 py-1 border text-sm rounded hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            Avbryt
+                          </button>
+                        </div>
+                      </div>
                     )}
 
                     {result.details && result.details.length > 0 && (

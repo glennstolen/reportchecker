@@ -21,6 +21,7 @@ interface Report {
   innleveringsdato: string | null;
   latest_score: number | null;
   latest_max_score: number | null;
+  is_anonymized: boolean;
   candidate_mappings: CandidateMapping[] | null;
 }
 
@@ -54,6 +55,42 @@ export default function ReportsPage() {
       setReports(reports.filter((r) => r.id !== id));
     } catch (error) {
       console.error("Failed to delete report:", error);
+    }
+  };
+
+  const downloadAnonymPdf = async (id: number, title: string) => {
+    try {
+      const response = await apiFetch(`/api/reports/${id}/anonymized-pdf`);
+      if (!response.ok) return;
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${title.replace(/ /g, "_")}_anonym.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (error) {
+      console.error("Failed to download anonymized PDF:", error);
+    }
+  };
+
+  const downloadCandidateMapping = async () => {
+    try {
+      const response = await apiFetch("/api/reports/candidate-mapping-export");
+      if (!response.ok) return;
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "kandidatnummer_mapping.csv";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (error) {
+      console.error("Failed to download candidate mapping:", error);
     }
   };
 
@@ -109,13 +146,22 @@ export default function ReportsPage() {
     <div className="px-4">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Rapporter</h1>
-        <a
-          href="/reports/upload"
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" />
-          Last opp
-        </a>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={downloadCandidateMapping}
+            className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-gray-50 text-sm text-gray-700"
+          >
+            <Download className="w-4 h-4" />
+            Kandidatnummer mapping
+          </button>
+          <a
+            href="/reports/upload"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            Last opp
+          </a>
+        </div>
       </div>
 
       {reports.length === 0 ? (
@@ -200,14 +246,25 @@ export default function ReportsPage() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end items-center gap-2">
+                      {report.is_anonymized && (
+                        <button
+                          onClick={() => downloadAnonymPdf(report.id, report.title)}
+                          className="flex items-center gap-1 px-2 py-1 text-xs border rounded hover:bg-gray-50 text-gray-600"
+                          title="Last ned anonymisert PDF"
+                        >
+                          <Download className="w-3 h-3" />
+                          Anonym PDF
+                        </button>
+                      )}
                       {report.latest_score !== null && (
                         <button
                           onClick={() => exportPdf(report.id, report.title)}
-                          className="text-blue-600 hover:text-blue-800"
-                          title="Eksporter som PDF"
+                          className="flex items-center gap-1 px-2 py-1 text-xs border rounded hover:bg-gray-50 text-gray-600"
+                          title="Last ned evalueringsrapport"
                         >
-                          <Download className="w-4 h-4" />
+                          <Download className="w-3 h-3" />
+                          Evalueringsrapport
                         </button>
                       )}
                       <button

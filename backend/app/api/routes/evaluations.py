@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.models.evaluation import Evaluation, AgentResult, EvaluationStatus
 from app.models.report import Report
 from app.models.agent_configuration import AgentConfiguration
-from app.schemas.evaluation import EvaluationCreate, EvaluationResponse, AgentResultResponse
+from app.schemas.evaluation import EvaluationCreate, EvaluationResponse, AgentResultResponse, InstructorOverrideRequest
 from app.services.evaluation_service import EvaluationService
 from app.ai.claude_client import ClaudeClient
 from app.ai.prompt_builder import build_evaluation_prompt, build_system_prompt, build_user_prompt, build_user_prompt_with_images
@@ -286,6 +286,50 @@ def get_evaluation(evaluation_id: int, db: Session = Depends(get_db)):
     return _build_evaluation_response(evaluation)
 
 
+@router.patch("/{evaluation_id}/agent-results/{agent_result_id}", response_model=EvaluationResponse)
+def update_instructor_override(
+    evaluation_id: int,
+    agent_result_id: int,
+    body: InstructorOverrideRequest,
+    db: Session = Depends(get_db),
+):
+    """Set or clear instructor score/comment for a single agent result."""
+    evaluation = db.query(Evaluation).filter(Evaluation.id == evaluation_id).first()
+    if not evaluation:
+        raise HTTPException(status_code=404, detail="Evaluation not found")
+
+    agent_result = db.query(AgentResult).filter(
+        AgentResult.id == agent_result_id,
+        AgentResult.evaluation_id == evaluation_id,
+    ).first()
+    if not agent_result:
+        raise HTTPException(status_code=404, detail="Agent result not found")
+
+    if body.instructor_score is not None and not (0 <= body.instructor_score <= 100):
+        raise HTTPException(status_code=400, detail="instructor_score must be between 0 and 100")
+
+    agent_result.instructor_score = body.instructor_score
+    agent_result.instructor_comment = body.instructor_comment
+
+    # Recalculate instructor total: use instructor_score if set, else fall back to AI score
+    all_results = evaluation.agent_results
+    has_any_override = any(r.instructor_score is not None for r in all_results)
+
+    if has_any_override:
+        instructor_total = sum(
+            ((r.instructor_score if r.instructor_score is not None else r.score) / 100) * r.max_score
+            for r in all_results
+            if r.score is not None and r.max_score is not None
+        )
+        evaluation.instructor_total_score = round(instructor_total, 1)
+    else:
+        evaluation.instructor_total_score = None
+
+    db.commit()
+    db.refresh(evaluation)
+    return _build_evaluation_response(evaluation)
+
+
 @router.get("/{evaluation_id}/status")
 def get_evaluation_status(evaluation_id: int, db: Session = Depends(get_db)):
     """Get evaluation status (for polling)."""
@@ -323,6 +367,8 @@ def _build_evaluation_response(evaluation: Evaluation) -> EvaluationResponse:
                 status=result.status.value,
                 prompt_used=result.prompt_used,
                 raw_response=result.raw_response,
+                instructor_score=result.instructor_score,
+                instructor_comment=result.instructor_comment,
             )
         )
 
@@ -337,4 +383,5 @@ def _build_evaluation_response(evaluation: Evaluation) -> EvaluationResponse:
         created_at=evaluation.created_at,
         started_at=evaluation.started_at,
         completed_at=evaluation.completed_at,
+        instructor_total_score=evaluation.instructor_total_score,
     )

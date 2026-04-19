@@ -19,6 +19,8 @@ class AgentResultResponse(BaseModel):
     status: str
     prompt_used: Optional[str] = None
     raw_response: Optional[str] = None
+    instructor_score: Optional[float] = None
+    instructor_comment: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -35,6 +37,12 @@ class EvaluationResponse(BaseModel):
     created_at: datetime
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
+    instructor_total_score: Optional[float] = None
 
     class Config:
         from_attributes = True
+
+
+class InstructorOverrideRequest(BaseModel):
+    instructor_score: Optional[float] = None  # 0–100, same scale as AI score
+    instructor_comment: Optional[str] = None

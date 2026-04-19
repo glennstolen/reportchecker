@@ -28,6 +28,7 @@ class Evaluation(Base):
     total_score = Column(Float, nullable=True)
     max_possible_score = Column(Float, nullable=True)
     summary = Column(Text, nullable=True)
+    instructor_total_score = Column(Float, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -47,6 +48,8 @@ class AgentResult(Base):
     score = Column(Float, nullable=True)
     max_score = Column(Float, nullable=True)
     feedback = Column(Text, nullable=True)
+    instructor_score = Column(Float, nullable=True)
+    instructor_comment = Column(Text, nullable=True)
 
     # Detailed results per criterion
     details = Column(JSON, nullable=True)

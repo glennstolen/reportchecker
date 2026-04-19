@@ -40,6 +40,8 @@ export interface AgentResult {
     comment: string;
   }> | null;
   status: "PENDING" | "RUNNING" | "COMPLETED" | "ERROR";
+  instructor_score: number | null;
+  instructor_comment: string | null;
 }
 
 export interface Evaluation {
@@ -53,4 +55,5 @@ export interface Evaluation {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+  instructor_total_score: number | null;
 }

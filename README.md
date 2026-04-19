@@ -16,8 +16,10 @@ AI-assistert vurdering og anonymisering av labrapporter i bioteknologi og biokje
   - **Helhetsvurdering** – rød tråd, lesbarhet, profesjonelt inntrykk (3%)
 - Parallell evaluering med live framdriftsvising
 - Score per kriterie med detaljert tilbakemelding
-- PDF-eksport av evalueringsresultater
+- **Instruktøroverstyring:** foreleser kan korrigere score og legge til kommentar per sjekker – både AI-score og instruktørscore vises
+- PDF-eksport av evalueringsresultater (inkl. instruktøroverstyringer)
 - Magic link-innlogging (ingen passord)
+- Last ned global kandidatnummer-mapping som CSV
 
 ## Teknisk stack
 
@@ -93,9 +95,21 @@ docker logs reportchecker-backend | grep "MAGIC LINK"
 2. Hvert navn får et fast 6-sifret kandidatnummer (samme navn → samme nummer alltid)
 3. Bruker verifiserer/korrigerer tabellen og legger til eventuelle navn-varianter (kommaseparert)
 4. Appen gjør søk-og-erstatt gjennom hele PDF-en og genererer ny anonymisert forside
-5. Last ned anonymisert PDF og mapping-fil (navn ↔ kandidatnummer)
+5. Last ned anonymisert PDF fra rapportlisten
 
 **Begrensninger:** Tekst som er brutt over linjer eller ligger i scannede bilder erstattes ikke.
+
+---
+
+## Instruktøroverstyring
+
+Etter at en AI-evaluering er gjennomført kan foreleser justere vurderingen:
+
+1. Åpne en ferdig evaluert rapport og klikk blyant-ikonet på en sjekker
+2. Skriv inn ny score (0–100, samme skala som AI) og/eller en kommentar
+3. Lagre – instruktørscoren beregnes automatisk som ny vektet totalscore
+4. Begge totalscore (AI og instruktør) vises side om side med egne progressbarer
+5. Instruktørdata inkluderes i PDF-eksporten av evalueringsrapporten
 
 ---
 
@@ -103,9 +117,11 @@ docker logs reportchecker-backend | grep "MAGIC LINK"
 
 1. Åpne http://localhost:3000 og logg inn
 2. Klikk **"Last opp rapport"** og velg en PDF
-3. Gå gjennom anonymiseringssteget og last ned anonymisert PDF
+3. Gå gjennom anonymiseringssteget
 4. Klikk **"Start evaluering"** på rapporten
 5. Se detaljerte resultater med score og tilbakemelding per kriterie
+6. Korriger eventuelt score/kommentar per sjekker med blyant-ikonet
+7. Last ned evalueringsrapport (PDF) eller kandidatnummer-mapping (CSV) fra rapportlisten
 
 ---
 
@@ -116,8 +132,9 @@ reportchecker/
 ├── frontend/                        # Next.js app
 │   └── src/
 │       ├── app/                     # Sider (Next.js App Router)
+│       │   ├── reports/             # Rapportliste
 │       │   ├── reports/upload/      # Opplasting
-│       │   ├── reports/[id]/        # Rapport + evaluering
+│       │   ├── reports/[id]/        # Rapport + evaluering + instruktøroverstyring
 │       │   ├── reports/[id]/anonymize/  # Anonymisering
 │       │   ├── agents/              # Agent-konfigurasjon
 │       │   ├── login/               # Innlogging
@@ -127,6 +144,7 @@ reportchecker/
 │   ├── app/
 │   │   ├── api/routes/              # API-endepunkter
 │   │   ├── models/                  # Database-modeller
+│   │   ├── schemas/                 # Pydantic-skjemaer
 │   │   ├── services/                # Forretningslogikk
 │   │   ├── document_processing/     # PDF-ekstraksjon og anonymisering
 │   │   └── core/                    # Auth, database, storage
