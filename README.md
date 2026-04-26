@@ -82,8 +82,8 @@ Rediger `.env` og fyll inn alle verdier:
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 ADMIN_EMAIL=din@epost.no
-DOMAIN=62.238.2.210              # IP-adresse eller domenenavn
-APP_URL=http://62.238.2.210      # Samme som DOMAIN, men med http(s)://
+DOMAIN=reportchecker.no   
+APP_URL=http://reportchecker.no 
 POSTGRES_PASSWORD=sterkt_passord
 MINIO_ACCESS_KEY=bruker
 MINIO_SECRET_KEY=sterkt_passord
