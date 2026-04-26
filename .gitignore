@@ -38,3 +38,10 @@ logs/
 # Local data
 uploads/
 reportchecker.txt
+
+# SSH keys
+id_*
+*.pub
+
+# Build artifacts
+frontend/tsconfig.tsbuildinfo
