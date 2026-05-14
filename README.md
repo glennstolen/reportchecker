@@ -105,9 +105,11 @@ docker compose -f docker-compose.prod.yml up -d
 
 Docker-images hentes automatisk fra GHCR. Backend kjører `alembic upgrade head` og oppretter admin-bruker fra `ADMIN_EMAIL` ved første oppstart.
 
-### 4. Brannmur
+### 4. Reverse proxy og brannmur
 
-Åpne kun port 22 (SSH), 80 (HTTP) og 443 (HTTPS). Alle andre porter (3000, 8000, 5432 osv.) skal være stengt – all trafikk rutes gjennom Caddy.
+Caddy ligger i et eget repo, [`hetzner-infra`](https://github.com/glennstolen/hetzner-infra), og settes opp én gang per server. Reportchecker er én av flere apper som registreres bak den delte Caddyen; backend og frontend kobles til det eksterne `public-net`-nettverket som Caddy lever på.
+
+I Hetzner-brannmuren skal kun port 22 (SSH), 80 (HTTP) og 443 (HTTPS) være åpne. All ekstern trafikk rutes gjennom Caddy i `hetzner-infra`.
 
 ### 5. E-post med magic link (Brevo)
 
@@ -252,7 +254,6 @@ reportchecker/
 │   └── alembic/versions/            # Databasemigrasjoner
 ├── docker-compose.yml               # Utviklingsmiljø
 ├── docker-compose.prod.yml          # Produksjonsmiljø
-├── Caddyfile                        # Reverse proxy-konfigurasjon
 └── .env.docker.example              # Mal for miljøvariabler
 ```
 
