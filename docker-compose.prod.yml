@@ -73,6 +73,7 @@ services:
         condition: service_started
     networks:
       - reportchecker-net
+      - public-net
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -86,29 +87,18 @@ services:
       - backend
     networks:
       - reportchecker-net
+      - public-net
     ports:
       - "3000:3000"
-    restart: unless-stopped
-
-  caddy:
-    image: caddy:2-alpine
-    container_name: reportchecker-caddy
-    network_mode: host
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - frontend
-      - backend
     restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
   minio_data:
-  caddy_data:
-  caddy_config:
 
-networks: 
-  reportchecker-net:  
+networks:
+  reportchecker-net:
+  public-net:
+    external: true
+
