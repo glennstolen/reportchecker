@@ -74,8 +74,9 @@ services:
     networks:
       - reportchecker-net
       - public-net
-    ports:
-      - "8000:8000"
+    # No ports: Caddy reaches it as reportchecker-backend:8000 over public-net.
+    # Published, it answered on every address of the VM, past Caddy, with only
+    # Hetzner's firewall in the way (reportchecker#7).
     restart: unless-stopped
 
   frontend:
@@ -88,8 +89,7 @@ services:
     networks:
       - reportchecker-net
       - public-net
-    ports:
-      - "3000:3000"
+    # No ports, as for the backend: Caddy reaches it as reportchecker-frontend:3000.
     restart: unless-stopped
 
 volumes:
